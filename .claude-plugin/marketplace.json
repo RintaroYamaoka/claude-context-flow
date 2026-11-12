@@ -1,0 +1,14 @@
+{
+  "name": "claude-context-flow",
+  "owner": {
+    "name": "RintaroYamaoka"
+  },
+  "description": "context-flow — 長いセッションでも、話の流れを見失わない。Claude Code の mod",
+  "plugins": [
+    {
+      "name": "context-flow",
+      "source": "./context-flow",
+      "description": "セッションの会話の流れを、チャットの横に 1 枚で出す。目的・ターンごとの見出しと説明・いま動いているツールとサブエージェント・モデルとコンテキスト量。見出しを押すとその発言へ飛ぶ。設定なし"
+    }
+  ]
+}

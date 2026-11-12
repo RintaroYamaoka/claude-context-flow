@@ -1,0 +1,9 @@
+{
+  "name": "claude-context-flow",
+  "private": true,
+  "description": "context-flow — 長いセッションでも、話の流れを見失わない。Claude Code の mod。npm の依存は無い",
+  "scripts": {
+    "validate": "claude plugin validate ./context-flow",
+    "typecheck": "cd context-flow && npx -y -p typescript tsc --noEmit -p ."
+  }
+}
