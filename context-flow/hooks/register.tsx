@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { Atom, EngineInterface, Register } from 'claude-code'
 
 import type { Live, Meter, Step, Sub } from '../types'
 
@@ -7,14 +7,14 @@ const PANE = 'context-flow'
 const TITLE = 'context'
 const TICK_MS = 2000
 /**
- * 描き直す間隔。1 秒に 60 回を狙う。前のコマを書き終えるまで次は送らないので、
- * 実際の速さはエンジンと端末が描ける上限で頭打ちになる。
+ * 描き直す間隔。エンジンが端末のペインを描き直すのは 1 秒に 30 回までなので、
+ * それに合わせる(これより細かく送っても、描かれずに捨てられるだけ)。
  */
-const BEAT_MS = 16
+const BEAT_MS = 33
 /** 動きの速さの単位。コマ番号は「この時間が何回過ぎたか」で、小数のまま使う。 */
 const FRAME_MS = 200
 /** 待機中は、このコマ数に 1 回だけ進める(ゆっくり呼吸する)。 */
-const IDLE_EVERY = 60
+const IDLE_EVERY = 30
 /** 起動アニメーション: タイトルが出ている時間と、そのあと画面が開く時間。 */
 const SPLASH_MS = 1900
 const REVEAL_MS = 700
@@ -34,7 +34,8 @@ const steps = atom({ plugin: 'context-flow', key: 'steps' } as const, [], {
 const live = atom({ plugin: 'context-flow', key: 'live' } as const, null, {
   shape: 'live-1',
 })
-const beat = atom({ plugin: 'context-flow', key: 'beat' } as const, 0)
+const beatRef = { plugin: 'context-flow', key: 'beat' } as const
+const beat = atom(beatRef, 0)
 const scroll = atom({ plugin: 'context-flow', key: 'scroll' } as const, 0)
 const boot = atom({ plugin: 'context-flow', key: 'boot' } as const, 0)
 const rows = atom({ plugin: 'context-flow', key: 'rows' } as const, {})
@@ -100,44 +101,49 @@ const runsOf = (
 }
 
 const PULSE = ['◌', '○', '◎', '◉', '◎', '○']
-// 虹の 7 色(やわらかい色味)。文字の上を流れ、その上を明るい帯が走る。
-const RAINBOW: readonly (readonly [number, number, number])[] = [
-  [235, 95, 87],
-  [245, 139, 87],
-  [250, 195, 95],
-  [145, 200, 130],
-  [130, 170, 220],
-  [155, 130, 200],
-  [200, 130, 180],
-]
+// ── ultracode と同じ見た目 ──
+// Claude Code 本体が、プロンプトの `ultracode` の文字に使っている色と動きをそのまま使う
+// (本体 2.1.322 のテーマ rainbow_* / rainbow_*_shimmer と、その描き方から):
+//   - 文字ごとに 7 色を順に繰り返す(色は流れない)
+//   - 光は 0.05 秒に 1 文字ずつ右へ進み、その文字と両隣の 3 文字が明るい色になる
+//   - 光は文字列の 10 文字手前から入り、10 文字先まで抜けて、頭に戻る
+const RAINBOW = [
+  '#eb5f57',
+  '#f58b57',
+  '#fac35f',
+  '#91c882',
+  '#82aadc',
+  '#9b82c8',
+  '#c882b4',
+] as const
+const RAINBOW_SHIMMER = [
+  '#fa9b93',
+  '#ffb989',
+  '#ffe19b',
+  '#b9e6b4',
+  '#b4cdf0',
+  '#c3b4e6',
+  '#e6b4d2',
+] as const
+/** 光が 1 文字進む時間。 */
+const SHIMMER_STEP_MS = 50
+/** 光が文字列の前後にはみ出す文字数。 */
+const SHIMMER_MARGIN = 10
 
-const hex = (rgb: readonly [number, number, number]): string =>
-  `#${rgb.map(v => Math.round(v).toString(16).padStart(2, '0')).join('')}`
+/** `index` 番目の文字の色。`isLit` なら明るい方。 */
+const rainbowAt = (index: number, isLit = false): string =>
+  (isLit ? RAINBOW_SHIMMER : RAINBOW)[((index % 7) + 7) % 7] ?? RAINBOW[0]
 
-/** 虹を一周する色。`t` は何周目でもよい。`glow` で白に寄せる(0〜1)。 */
-const rainbow = (t: number, glow = 0): string => {
-  const x = (((t % 1) + 1) % 1) * RAINBOW.length
-  const i = Math.floor(x) % RAINBOW.length
-  const a = RAINBOW[i] ?? [0, 0, 0]
-  const b = RAINBOW[(i + 1) % RAINBOW.length] ?? a
-  const k = x - Math.floor(x)
-  const mix = (n: 0 | 1 | 2): number => {
-    const v = a[n] + (b[n] - a[n]) * k
+/** いま光が当たっている文字の位置。`frame` は FRAME_MS を単位にした時刻。 */
+const glimmerAt = (length: number, frame: number): number =>
+  -SHIMMER_MARGIN +
+  (Math.floor((frame * FRAME_MS) / SHIMMER_STEP_MS) %
+    (length + SHIMMER_MARGIN * 2))
 
-    return v + (255 - v) * glow
-  }
-
-  return hex([mix(0), mix(1), mix(2)])
-}
-
-/** `index` 桁目の文字の見た目: 虹が左へ流れ、明るい帯が右へ走る。 */
-const ultraAt = (index: number, length: number, frame: number): Omit<Run, 'text'> => {
-  const center = ((frame * 2.2) % (length + 16)) - 6
-  const far = Math.abs(index - center)
-  const glow = far < 1.2 ? 0.75 : far < 3 ? 0.4 : 0
-
-  return { color: rainbow(index * 0.045 - frame * 0.05, glow), isBold: true }
-}
+/** `index` 番目の文字の見た目: 7 色の繰り返しに、光の 3 文字だけ明るい色。 */
+const ultraAt = (index: number, length: number, frame: number): Omit<Run, 'text'> => ({
+  color: rainbowAt(index, Math.abs(index - glimmerAt(length, frame)) <= 1),
+})
 
 const ultra = (text: string, frame: number): Run[] => {
   const length = [...text].length
@@ -177,6 +183,43 @@ const clock = (ms: number): string => {
 
   return `${m}:${String(s).padStart(2, '0')}`
 }
+
+// ── 状態の控え ────────────────────────────────────────────────────────
+// 描くたびに状態を読みに行くと 1 コマに何度も通信が走るので、書いた値を手元に控え、
+// 描く時はそれを読む。書くのはこの mod だけなので、控えはいつも最新。
+
+const held = new Map<unknown, unknown>()
+let isHydrated = false
+
+/** 書いた値を手元の控えにも入れる。少しの間は毎コマ描いて、すぐ画面に出す。 */
+const keep = <T,>(target: Atom<T>, value: T): T => {
+  held.set(target, value)
+  fastUntil = Math.max(fastUntil, Date.now() + 250)
+
+  return value
+}
+
+/** 控えから読む(通信しない)。 */
+const peek = <T,>(target: Atom<T>): T =>
+  held.has(target) ? (held.get(target) as T) : target.initial
+
+/** 読み込み直後に 1 度だけ、保存されている値を控えに入れる。 */
+const hydrate = async ($: EngineInterface): Promise<void> => {
+  held.set(meter, await read($, meter))
+  held.set(goal, await read($, goal))
+  held.set(steps, await read($, steps))
+  held.set(live, await read($, live))
+  held.set(scroll, await read($, scroll))
+  held.set(agents, await read($, agents))
+  held.set(boot, await read($, boot))
+  isHydrated = true
+}
+
+/** この時刻までは、待機中でも毎コマ進める(文字の打ち出しを見せる)。 */
+let fastUntil = 0
+
+/** 折り返しの結果の控え(同じ文を毎コマ折り返さない)。 */
+const wrapMemo = new Map<string, string[]>()
 
 // ── 文字列 ────────────────────────────────────────────────────────────
 
@@ -234,7 +277,7 @@ const refreshMeter = async ($: EngineInterface): Promise<void> => {
   }
   const now = await read($, meter)
   if (JSON.stringify(now) !== JSON.stringify(next)) {
-    await update($, meter, () => next)
+    await keep(meter, await update($, meter, () => next))
   }
 }
 
@@ -257,7 +300,7 @@ const refreshAgents = async ($: EngineInterface): Promise<void> => {
   hasAgents = next.length > 0
   const now = await read($, agents)
   if (JSON.stringify(now) !== JSON.stringify(next)) {
-    await update($, agents, () => next)
+    await keep(agents, await update($, agents, () => next))
   }
 }
 
@@ -310,15 +353,15 @@ const summarizeNext = async ($: EngineInterface): Promise<void> => {
     /^TITLE:\s*(.+)$/m.exec(text)?.[1]?.trim() ||
     clip(step.prompt || '(入力なしで続行)', 30)
 
-  await update($, steps, now =>
+  await keep(steps, await update($, steps, now =>
     now.map(one =>
       one.id === step.id
         ? { ...one, title, summary, doneAt, answer: '', tools: [] }
         : one,
     ),
-  )
+  ))
   fastUntil = doneAt + 3500
-  if (newGoal) await update($, goal, () => newGoal)
+  if (newGoal) await keep(goal, await update($, goal, () => newGoal))
 }
 
 /** mod が途中で読み込まれた時、それまでの会話からターンを起こす。 */
@@ -361,9 +404,9 @@ const backfill = async ($: EngineInterface): Promise<void> => {
   const running = await read($, live)
   const past = running === null ? found : found.slice(0, -1)
   if (past.length === 0) return
-  await update($, steps, now =>
+  await keep(steps, await update($, steps, now =>
     now.length > 0 ? now : past.slice(-BACKFILL_TURNS),
-  )
+  ))
 }
 
 /** 発言の頭 → トランスクリプトの行。行が描かれるたびに覚える。 */
@@ -377,7 +420,7 @@ const saveRows = async ($: EngineInterface): Promise<void> => {
   if (!hasNewRows) return
   hasNewRows = false
   const latest = Object.fromEntries([...rowIds].slice(-400))
-  await update($, rows, () => latest)
+  await keep(rows, await update($, rows, () => latest))
 }
 
 /** ターンの依頼文から、それを始めた発言の行を探す。 */
@@ -418,15 +461,13 @@ let hasOpened = false
 const playBoot = async ($: EngineInterface): Promise<void> => {
   const bootAt = Date.now()
   fastUntil = bootAt + SPLASH_MS + REVEAL_MS + 400
-  await update($, boot, () => bootAt)
+  await keep(boot, await update($, boot, () => bootAt))
 }
 
 let isSummarizing = false
 let isRunning = false
 /** 返答の前に中断されたターンの依頼。次のターンの依頼の頭に付ける。 */
 let carried = ''
-/** この時刻までは、待機中でも毎コマ進める(文字の打ち出しを見せる)。 */
-let fastUntil = 0
 let hasBackfilled = false
 
 const tick = async ($: EngineInterface): Promise<void> => {
@@ -506,7 +547,8 @@ export const register: Register = on => {
     })
     // アニメーションのコマ送り。走っている間と、要約が届いた直後は毎コマ、
     // 待機中は数コマに 1 回だけ進める。
-    isRunning = (await read($, live)) !== null
+    await hydrate($)
+    isRunning = peek(live) !== null
     await playBoot($)
     // 前に覚えた行を戻す(再読み込みで消えるため)。
     for (const [anchor, id] of Object.entries(await read($, rows))) {
@@ -518,9 +560,9 @@ export const register: Register = on => {
     $.clock.every(BEAT_MS, () => {
       count++
       const now = Date.now()
-      // 0.1 秒ごとに、自分のタブが表に出ているかを見る。
+      // 約 0.25 秒ごとに、自分のタブが表に出ているかを見る。
       // 裏から表に切り替わった瞬間に、起動アニメーションを流す。
-      if (count % 6 === 0 && !isLooking) {
+      if (count % 8 === 0 && !isLooking) {
         isLooking = true
         void $.ui
           .panes()
@@ -543,7 +585,8 @@ export const register: Register = on => {
       // 前のコマがまだ書き終わっていなければ、このコマは飛ばす(溜めない)。
       if (isBeating) return
       isBeating = true
-      void update($, beat, () => now)
+      void $.state
+        .set(beatRef, now)
         .catch(() => undefined)
         .then(() => {
           isBeating = false
@@ -578,9 +621,9 @@ export const register: Register = on => {
 
   on('session.end', async ($, e, next) => {
     if (e.reason === 'clear') {
-      await update($, steps, () => [])
-      await update($, live, () => null)
-      await update($, goal, () => '')
+      await keep(steps, await update($, steps, () => []))
+      await keep(live, await update($, live, () => null))
+      await keep(goal, await update($, goal, () => ''))
     }
 
     return next(e)
@@ -597,15 +640,15 @@ export const register: Register = on => {
     carried = ''
     const anchor = anchorOf(e.text)
     // 新しいターンが始まったら、最新を追う位置に戻す。
-    await update($, scroll, () => 0)
-    await update($, live, () => ({
+    await keep(scroll, await update($, scroll, () => 0))
+    await keep(live, await update($, live, () => ({
       turnId: e.turnId,
       prompt,
       anchor,
       actions: [],
       tools: [],
       startedAt,
-    }))
+    })))
 
     return next(e)
   })
@@ -618,9 +661,9 @@ export const register: Register = on => {
       agentActions.set(id, action)
       const known = await read($, agents)
       if (known.some(agent => agent.id === id)) {
-        await update($, agents, list =>
+        await keep(agents, await update($, agents, list =>
           list.map(agent => (agent.id === id ? { ...agent, action } : agent)),
-        )
+        ))
       } else {
         void refreshAgents($).catch(() => undefined)
       }
@@ -631,7 +674,7 @@ export const register: Register = on => {
     const action = actionOf(e)
     const tool = String(e.tool).replace(/^mcp__.*__/, '')
     const startedAt = await $.clock.now()
-    await update($, live, now => {
+    await keep(live, await update($, live, now => {
       // ターンの途中で読み込まれた時は、ここから追い始める。
       const base: Live = now ?? {
         turnId: `joined-${startedAt}`,
@@ -649,7 +692,7 @@ export const register: Register = on => {
             ? base.tools
             : [...base.tools, tool],
       }
-    })
+    }))
     const ran = await next(e)
     void refreshMeter($).catch(() => undefined)
 
@@ -661,7 +704,7 @@ export const register: Register = on => {
       // 終わったサブエージェントは、すぐ表示から外す。
       const id = e.agentId
       agentActions.delete(id)
-      await update($, agents, list => list.filter(agent => agent.id !== id))
+      await keep(agents, await update($, agents, list => list.filter(agent => agent.id !== id)))
       hasAgents = (await read($, agents)).length > 0
 
       return next(e)
@@ -682,14 +725,14 @@ export const register: Register = on => {
       // 何も返さないまま止まったターンは流れに載せず、依頼だけ次へ持ち越す。
       carried = step.prompt
     } else if (step.prompt !== '' || step.answer !== '') {
-      await update($, steps, now =>
+      await keep(steps, await update($, steps, now =>
         now.some(one => one.id === step.id)
           ? now
           : [...now, step].slice(-MAX_STEPS),
-      )
+      ))
     }
     isRunning = false
-    await update($, live, () => null)
+    await keep(live, await update($, live, () => null))
     void tick($)
 
     return next(e)
@@ -710,25 +753,26 @@ export const register: Register = on => {
   // ペインの上のホイール・スクロールキーは、流れの窓だけを動かす。
   // 上(計器・目的)と下(いま)は動かさないので、エンジンには動かさせない。
   on('ui.scroll', { requestId: PANE }, async ($, e) => {
-    await update($, scroll, back =>
+    await keep(scroll, await update($, scroll, back =>
       Math.min(maxScroll, Math.max(0, Math.min(back, maxScroll) - e.by)),
-    )
+    ))
 
     return {}
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Button, Text } = $.ui.resolve(e)
-    const [gauge, aim, list, running, now, back, subs, bootAt] = await Promise.all([
-      read($, meter),
-      read($, goal),
-      read($, steps),
-      read($, live),
-      read($, beat),
-      read($, scroll),
-      read($, agents),
-      read($, boot),
-    ])
+    // 状態から読むのは「コマの時刻」だけ(これが描き直しのきっかけになる)。
+    // ほかは手元の控えから読むので、1 コマの通信は 1 回で済む。
+    if (!isHydrated) await hydrate($)
+    const now = await read($, beat)
+    const gauge = peek(meter)
+    const aim = peek(goal)
+    const list = peek(steps)
+    const running = peek(live)
+    const back = peek(scroll)
+    const subs = peek(agents)
+    const bootAt = peek(boot)
     // 左右に 2 桁ずつの余白を取る。
     const columns = Math.max(24, e.props.bodyColumns - 4)
     const text = columns - 3 // レールの右の、文章の幅
@@ -763,18 +807,8 @@ export const register: Register = on => {
           ? `– / ${formatTokens(gauge.window)}`
           : `${formatTokens(gauge.tokens)} / ${formatTokens(gauge.window)}`
     const filled = Math.round((percent / 100) * columns)
-    // 埋まっている部分を、光の帯が左から右へ走る。
-    const glint = ((frame * 1.5) % (filled + 12)) - 3
-    const bar = runsOf('━'.repeat(filled), i => {
-      const far = Math.abs(i - glint)
-
-      const glow = far < 1.5 ? 0.75 : far < 3.5 ? 0.4 : 0
-
-      return {
-        color: rainbow(i * 0.045 - frame * 0.05, glow),
-        isBold: glow > 0,
-      }
-    })
+    // 埋まっている部分も、文字と同じ 7 色と光で描く。
+    const bar = ultra('━'.repeat(filled), frame)
     const aimLines = wrapCells(
       aim || (list.length > 0 ? '読み取り中…' : 'まだ会話がありません'),
       columns,
@@ -791,9 +825,8 @@ export const register: Register = on => {
           : model.name
     // 上の余白 1 行+計器 2 行+空行+目的+空行+流れの見出し+空行。
     const headRows = 1 + 2 + 1 + 1 + aimLines.length + 1 + 1 + 1
-    /** いまの虹の色(1 色で塗るもの用)。全体で同じ流れに乗せる。 */
-    const hue = (index = 0, glow = 0): string =>
-      rainbow(index * 0.045 - frame * 0.05, glow)
+    /** 1 色で塗るもの(レール・カーソル)の色。`glow` があれば明るい方。 */
+    const hue = (index = 0, glow = 0): string => rainbowAt(index, glow > 0)
 
     // ── 固定フッター: いま ──
     const actions = running?.actions.slice(-3) ?? []
@@ -873,7 +906,16 @@ export const register: Register = on => {
     }
 
     // ── 流れ: ヘッダーとフッターの間の窓。ここだけがスクロールする ──
-    const wrapped = list.map(step => wrapCells(step.summary ?? '', text, 3))
+    if (wrapMemo.size > 600) wrapMemo.clear()
+    const wrapped = list.map(step => {
+      const key = `${text}\u0000${step.summary ?? ''}`
+      const known = wrapMemo.get(key)
+      if (known !== undefined) return known
+      const lines = wrapCells(step.summary ?? '', text, 3)
+      wrapMemo.set(key, lines)
+
+      return lines
+    })
     // 1 ターン = 見出し+説明+間の 1 行(待機中の最後のターンは間を置かない)。
     const sizes = wrapped.map(
       (lines, i) =>
@@ -986,11 +1028,11 @@ export const register: Register = on => {
       // レールも同じ虹に乗せる。落ちてくる光の頭ほど白に近い。
       const railColor =
         far === 0
-          ? hue(row * 2, 0.75)
+          ? hue(row, 0.75)
           : far === 1
-            ? hue(row * 2, 0.4)
+            ? hue(row, 0.4)
             : line.isLive || line.isStrong || far === 2
-              ? hue(row * 2)
+              ? hue(row)
               : undefined
       const isLit = railColor !== undefined
       const target = line.target
@@ -1044,7 +1086,7 @@ export const register: Register = on => {
               <Text dimColor>{line.right}</Text>
             )}
             {line.right !== undefined && !line.isRightQuiet && (
-              <Text bold color={hue(text)}>
+              <Text color={hue(text)}>
                 {line.right}
               </Text>
             )}
@@ -1058,7 +1100,7 @@ export const register: Register = on => {
         <Box flexDirection="row" justifyContent="space-between">
           <Box flexDirection="row">
             {ultra(nameText, frame).map(run => (
-              <Text bold color={run.color}>
+              <Text color={run.color}>
                 {run.text}
               </Text>
             ))}
@@ -1072,7 +1114,7 @@ export const register: Register = on => {
         </Box>
         <Box flexDirection="row">
           {bar.map(run => (
-            <Text bold={run.isBold} color={run.isBold ? run.color : (tone ?? run.color)}>
+            <Text color={tone ?? run.color}>
               {run.text}
             </Text>
           ))}
@@ -1150,7 +1192,7 @@ export const register: Register = on => {
       >
         <Box flexDirection="row">
           {ultra(typed === '' ? ' ' : typed, frame).map(run => (
-            <Text bold color={run.color}>
+            <Text color={run.color}>
               {run.text}
             </Text>
           ))}
@@ -1158,7 +1200,7 @@ export const register: Register = on => {
         </Box>
         <Box flexDirection="row" marginTop={1}>
           {ultra('━'.repeat(Math.max(1, half * 2)), frame).map(run => (
-            <Text bold color={run.color}>
+            <Text color={run.color}>
               {run.text}
             </Text>
           ))}
