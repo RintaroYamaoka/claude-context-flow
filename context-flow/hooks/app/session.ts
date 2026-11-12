@@ -14,6 +14,11 @@ const TICK_MS = 2000
  * それに合わせる(これより細かく送っても、描かれずに捨てられるだけ)。
  */
 const BEAT_MS = 33
+/**
+ * セッションの開始から、自分のペインを開くまでの待ち。
+ * ほかの mod がこの間にペインを開けば、その直後に開く(`openBehind`)。
+ */
+const OPEN_WAIT_MS = 300
 
 /** このセッションで、自分のペインをもう開いたか。 */
 let hasOpened = false
@@ -44,8 +49,12 @@ export async function startSession($: EngineInterface): Promise<void> {
   // 前に選んだ背景の配色を戻す。
   const saved = await $.store.get('backdrop').catch(() => undefined)
   if (typeof saved === 'string' && saved in PALETTES) flags.paletteName = saved
-  hasOpened = true
-  void $.ui.open(paneOpen())
+  // ほかの mod がペインを開くのを少し待ってから開く(その前に開いたら `openBehind` が開く)。
+  $.clock.after(OPEN_WAIT_MS, () => {
+    if (hasOpened) return
+    hasOpened = true
+    void $.ui.open(paneOpen())
+  })
   $.clock.every(TICK_MS, () => {
     void tick($)
   })
@@ -92,8 +101,11 @@ export async function startSession($: EngineInterface): Promise<void> {
   void tick($)
 }
 
-/** ほかの mod がペインを開く前に、自分のペインを先に開く(タブの並びで先頭に来るように)。 */
-export async function openAhead($: EngineInterface, id: string): Promise<void> {
+/**
+ * ほかの mod のペインが開いた直後に、自分のペインを開く。
+ * 最後に開いたペインが表に出るので、セッションを開いた時に自分のペインが見えるようにする。
+ */
+export async function openBehind($: EngineInterface, id: string): Promise<void> {
   if (id !== PANE && !hasOpened) {
     hasOpened = true
     await $.ui.open(paneOpen()).catch(() => undefined)

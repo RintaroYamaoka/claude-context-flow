@@ -3,7 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import { dropAgent, noteAgentCall, refreshMeter } from './app/gauges'
 import { jump, rememberRow } from './app/rows'
-import { openAhead, runCommand, startSession } from './app/session'
+import { openBehind, runCommand, startSession } from './app/session'
 import { clearFlow, completeTurn, noteToolCall, startTurn } from './app/turn'
 import type { Target } from './domain/flow'
 import { actionOf, toolName } from './domain/text'
@@ -26,9 +26,10 @@ export const register: Register = on => {
   })
 
   on('ui.open', async ($, e, next) => {
-    await openAhead($, e.id)
+    const opened = await next(e)
+    await openBehind($, e.id)
 
-    return next(e)
+    return opened
   })
 
   on('command.run', { command: 'context-flow' }, ($, e) =>
