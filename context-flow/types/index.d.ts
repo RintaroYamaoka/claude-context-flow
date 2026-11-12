@@ -16,6 +16,10 @@ export type Step = {
   /** 一目で読む見出し(15 字ほど)。 */
   title?: string
   summary?: string
+  /** このターンが属する話題のまとまり(章)の名前。 */
+  chapter?: string
+  /** 本筋を先へ進めるターンではなく、手直し・やり直し・脱線(寄り道)か。 */
+  isSide?: boolean
   /** ターンを始めた発言の頭(トランスクリプトの行を探す手がかり)。 */
   anchor?: string
   /** その発言のトランスクリプト上の行。押すとここへ飛ぶ。 */
@@ -56,6 +60,10 @@ declare module 'claude-code' {
       beat: number
       /** 流れの窓が、最新から何行さかのぼっているか(0 = 最新を追う)。 */
       scroll: number
+      /** ここまでに決まったこと・出来上がったもの(短い箇条書き)。 */
+      decided: string[]
+      /** まだ終わっていないこと(短い箇条書き)。 */
+      open: string[]
       /** セッションが始まった時刻。ここから起動アニメーションが流れる。 */
       boot: number
       agents: Shaped<Sub[]>
