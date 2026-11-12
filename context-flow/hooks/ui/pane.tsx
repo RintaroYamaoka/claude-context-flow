@@ -295,6 +295,7 @@ export function renderPane(
     out.push(draw(line, lines.length + row))
   })
   // 下の余りも塗って、ペインの底まで背景を続ける。
+  // 下の余りも塗って、ペインの底まで背景を続ける。
   while (out.length < room) out.push(undefined)
 
   const view = (

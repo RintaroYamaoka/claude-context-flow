@@ -44,11 +44,12 @@ export const PALETTES: Record<string, Palette | null> = {
   akane: { label: '茜', top: [52, 18, 28], bottom: [12, 5, 8] },
   yoake: { label: '夜明け', top: [14, 22, 50], bottom: [44, 20, 38] },
   umi: { label: '深海', top: [6, 34, 48], bottom: [3, 8, 16] },
+  // 塗らない。端末の地の色(ふつうは黒)がそのまま出る。
   none: null,
 }
 export const PALETTE_NAMES = Object.keys(PALETTES)
 /** 何も選んでいない時の配色。 */
-export const DEFAULT_PALETTE = 'sumi'
+export const DEFAULT_PALETTE = 'none'
 
 /** ペインに敷く一色。配色の上の色と下の色の中ほど。 */
 export const paneBackground = (paletteName: string): string => {
@@ -71,7 +72,7 @@ export const backgroundAt = (
 /** 配色の一覧(コマンドの返事に添える)。 */
 export const paletteList = (): string =>
   PALETTE_NAMES.map(
-    name => `${name}(${PALETTES[name]?.label ?? '背景なし'})`,
+    name => `${name}(${PALETTES[name]?.label ?? '黒'})`,
   ).join(' / ')
 
 /** 頼まれた配色の名前を決める。空なら次の配色、名前か呼び名ならそれ。無ければ undefined。 */
