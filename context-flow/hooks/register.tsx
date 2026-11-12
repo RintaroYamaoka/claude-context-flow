@@ -13,8 +13,6 @@ const TICK_MS = 2000
 const BEAT_MS = 33
 /** 動きの速さの単位。コマ番号は「この時間が何回過ぎたか」で、小数のまま使う。 */
 const FRAME_MS = 200
-/** 待機中は、このコマ数に 1 回だけ進める(ゆっくり呼吸する)。 */
-const IDLE_EVERY = 30
 /** 起動アニメーション: タイトルが出ている時間と、そのあと画面が開く時間。 */
 const SPLASH_MS = 1900
 const REVEAL_MS = 700
@@ -580,8 +578,7 @@ export const register: Register = on => {
       }
       // 裏に回っている間は描かない。
       if (isShown === false) return
-      const isBusy = isRunning || hasAgents || now <= fastUntil
-      if (!isBusy && count % IDLE_EVERY !== 0) return
+      // 待機中も同じ速さで描く(モデル名とバーの光が、放置しても遅くならないように)。
       // 前のコマがまだ書き終わっていなければ、このコマは飛ばす(溜めない)。
       if (isBeating) return
       isBeating = true
