@@ -5,9 +5,7 @@
 セッションが長くなると、いま何の話をしていて、ここまで何が決まったのかが、スクロールの向こうに消えていく。
 context-flow は、その「会話の流れ」をチャットの横に 1 枚で出し続ける。左の Claude Code は素のまま。
 
-
-https://github.com/user-attachments/assets/e4361666-6949-4b06-b985-c281294a8a9a
-
+https://github.com/user-attachments/assets/1dca85c0-0a0a-4c62-b149-4a308ff12974
 
 ```
   F A B L E   5 . 2          84.2k / 200k  42%
