@@ -2,7 +2,7 @@
 // 起動アニメーションの再生と、`/context-flow` の引数(boot・bg)もここ。
 import type { EngineInterface } from 'claude-code'
 
-import { PALETTES, paletteList, paneBackground, pickPalette } from '../domain/color'
+import { PALETTES, paletteList, pickPalette } from '../domain/color'
 import { PANE, flags, hydrate, setBeat, setBoot } from '../store'
 import { restoreRows } from './rows'
 import { tick } from './tick'
@@ -18,11 +18,15 @@ const BEAT_MS = 33
 /** このセッションで、自分のペインをもう開いたか。 */
 let hasOpened = false
 
-/** ペインの開き方。背景は、いまの配色の中ほどの色。 */
+/**
+ * ペインの開き方。エンジンが敷く灰色の地は外す(`transparent`)。
+ * 地を残すと、mod が塗れないペインの一番下の 1 行だけ灰色が見える。
+ * 配色の色は、行ごとに mod が塗る。
+ */
 const paneOpen = () => ({
   id: PANE,
   title: TITLE,
-  backgroundColor: paneBackground(flags.paletteName),
+  backgroundColor: 'transparent',
 })
 
 /** 起動アニメーションを最初から流す。 */
@@ -38,7 +42,7 @@ export async function startSession($: EngineInterface): Promise<void> {
       'セッションの会話の流れ・モデル・コンテキスト量のペインを開く(boot で起動アニメーションを再生、bg で背景の配色を切り替え)',
   })
   // 前に選んだ背景の配色を戻す。
-  const saved = await $.store.get('background').catch(() => undefined)
+  const saved = await $.store.get('backdrop').catch(() => undefined)
   if (typeof saved === 'string' && saved in PALETTES) flags.paletteName = saved
   hasOpened = true
   void $.ui.open(paneOpen())
@@ -108,11 +112,11 @@ export async function runCommand(
     const names = paletteList()
     if (next === undefined) return { text: `その配色はありません。選べるのは: ${names}` }
     flags.paletteName = next
-    await $.store.set('background', next).catch(() => undefined)
+    await $.store.set('backdrop', next).catch(() => undefined)
     await $.ui.open(paneOpen())
 
     return {
-      text: `背景を ${next}(${PALETTES[next]?.label ?? '背景なし'})にしました。選べるのは: ${names}`,
+      text: `背景を ${next}(${PALETTES[next]?.label ?? '黒'})にしました。選べるのは: ${names}`,
     }
   }
   await $.ui.open(paneOpen())
