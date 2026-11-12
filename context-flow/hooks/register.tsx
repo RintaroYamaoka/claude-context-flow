@@ -100,11 +100,11 @@ const runsOf = (
 
 const PULSE = ['◌', '○', '◎', '◉', '◎', '○']
 // ── ultracode と同じ見た目 ──
-// Claude Code 本体が、プロンプトの `ultracode` の文字に使っている色と動きをそのまま使う
-// (本体 2.1.322 のテーマ rainbow_* / rainbow_*_shimmer と、その描き方から):
-//   - 文字ごとに 7 色を順に繰り返す(色は流れない)
-//   - 光は 0.05 秒に 1 文字ずつ右へ進み、その文字と両隣の 3 文字が明るい色になる
-//   - 光は文字列の 10 文字手前から入り、10 文字先まで抜けて、頭に戻る
+// Claude Code 本体が、実行中の虹色のラベルに使っている色と動きをそのまま使う
+// (本体 2.1.322 のテーマ rainbow_* と、タスク一覧の実行中ラベルの描き方から):
+//   - 文字ごとに 7 色を順に繰り返す
+//   - 0.24 秒ごとに、色の並び全体が 1 文字ぶんずれていく
+//   - 光の帯は無い
 const RAINBOW = [
   '#eb5f57',
   '#f58b57',
@@ -123,24 +123,20 @@ const RAINBOW_SHIMMER = [
   '#c3b4e6',
   '#e6b4d2',
 ] as const
-/** 光が 1 文字進む時間。 */
-const SHIMMER_STEP_MS = 50
-/** 光が文字列の前後にはみ出す文字数。 */
-const SHIMMER_MARGIN = 10
+/** 色の並びが 1 文字ぶんずれる間隔(本体は 80ms × 3)。 */
+const PHASE_STEP_MS = 240
 
-/** `index` 番目の文字の色。`isLit` なら明るい方。 */
+/** いまの色のずれ(0〜6)。`frame` は FRAME_MS を単位にした時刻。 */
+const phaseAt = (frame: number): number =>
+  Math.floor((frame * FRAME_MS) / PHASE_STEP_MS) % 7
+
+/** `index` 番目の文字の色。`isLit` なら明るい方(レールを落ちる光に使う)。 */
 const rainbowAt = (index: number, isLit = false): string =>
   (isLit ? RAINBOW_SHIMMER : RAINBOW)[((index % 7) + 7) % 7] ?? RAINBOW[0]
 
-/** いま光が当たっている文字の位置。`frame` は FRAME_MS を単位にした時刻。 */
-const glimmerAt = (length: number, frame: number): number =>
-  -SHIMMER_MARGIN +
-  (Math.floor((frame * FRAME_MS) / SHIMMER_STEP_MS) %
-    (length + SHIMMER_MARGIN * 2))
-
-/** `index` 番目の文字の見た目: 7 色の繰り返しに、光の 3 文字だけ明るい色。 */
-const ultraAt = (index: number, length: number, frame: number): Omit<Run, 'text'> => ({
-  color: rainbowAt(index, Math.abs(index - glimmerAt(length, frame)) <= 1),
+/** `index` 番目の文字の見た目: 7 色の繰り返しが、時間とともに 1 文字ずつずれる。 */
+const ultraAt = (index: number, _length: number, frame: number): Omit<Run, 'text'> => ({
+  color: rainbowAt(index + phaseAt(frame)),
 })
 
 const ultra = (text: string, frame: number): Run[] => {
@@ -804,7 +800,7 @@ export const register: Register = on => {
           ? `– / ${formatTokens(gauge.window)}`
           : `${formatTokens(gauge.tokens)} / ${formatTokens(gauge.window)}`
     const filled = Math.round((percent / 100) * columns)
-    // 埋まっている部分も、文字と同じ 7 色と光で描く。
+    // 埋まっている部分も、文字と同じ 7 色のずれで描く。
     const bar = ultra('━'.repeat(filled), frame)
     const aimLines = wrapCells(
       aim || (list.length > 0 ? '読み取り中…' : 'まだ会話がありません'),
@@ -822,8 +818,9 @@ export const register: Register = on => {
           : model.name
     // 上の余白 1 行+計器 2 行+空行+目的+空行+流れの見出し+空行。
     const headRows = 1 + 2 + 1 + 1 + aimLines.length + 1 + 1 + 1
-    /** 1 色で塗るもの(レール・カーソル)の色。`glow` があれば明るい方。 */
-    const hue = (index = 0, glow = 0): string => rainbowAt(index, glow > 0)
+    /** 1 色で塗るもの(レール・カーソル)の色。文字と同じずれに乗せる。 */
+    const hue = (index = 0, glow = 0): string =>
+      rainbowAt(index + phaseAt(frame), glow > 0)
 
     // ── 固定フッター: いま ──
     const actions = running?.actions.slice(-3) ?? []
