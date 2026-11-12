@@ -130,19 +130,76 @@ export const rainbow = (t: number, glow = 0): string => {
 export const hueAt = (frame: number, index = 0, glow = 0): string =>
   rainbow(index * 0.045 - frame * 0.05, glow)
 
-/** `index` 桁目の文字の見た目: 虹が左へ流れ、明るい帯が右へ走る。 */
-const ultraAt = (index: number, length: number, frame: number): Omit<Run, 'text'> => {
-  const center = ((frame * 2.2) % (length + 16)) - 6
-  const far = Math.abs(index - center)
-  const glow = far < 1.2 ? 0.75 : far < 3 ? 0.4 : 0
+// ── 光の帯 ──
+// 明るい帯は、ペインを左から右へ横切る 1 本だけ。どの行も、帯が自分の桁を通る時に光る。
+// 速さ・幅・周期をここで 1 度だけ決めるので、モデル名もバーも文字も同じ調子で動く。
+/** 帯が 1 コマ(FRAME_MS)に進む桁数。 */
+const BAND_SPEED = 3
+/** 帯が一周する桁数(ペインの幅より少し長く取り、右へ抜けてから戻る)。 */
+const BAND_SPAN = 64
+/** 帯が左端の何桁手前から入ってくるか。 */
+const BAND_LEAD = 6
 
-  return { color: rainbow(index * 0.045 - frame * 0.05, glow), isBold: true }
+/** ペインの `cell` 桁目に、いま帯がどれだけ当たっているか(0・0.4・0.75)。 */
+export const glowAt = (cell: number, frame: number): number => {
+  const far = Math.abs(cell - (((frame * BAND_SPEED) % BAND_SPAN) - BAND_LEAD))
+
+  return far < 1.5 ? 0.75 : far < 3.5 ? 0.4 : 0
 }
 
-export const ultra = (text: string, frame: number): Run[] => {
-  const length = [...text].length
+/** 文字ごとの、ペインの中での桁(全角は 2 桁)。`offset` は行の頭の桁。 */
+const cellsOf = (text: string, offset: number): number[] => {
+  const starts: number[] = []
+  let cell = offset
+  for (const ch of text) {
+    starts.push(cell)
+    cell += (ch.codePointAt(0) ?? 0) > 0x2e7f ? 2 : 1
+  }
 
-  return runsOf(text, i => ultraAt(i, length, frame))
+  return starts
+}
+
+/**
+ * 虹の文字: 虹が左へ流れ、明るい帯が右へ走る。
+ * 色も帯も、ペインの中での桁で決める(同じ桁なら、どの行も同じ色・同じ光り方)。
+ */
+export const ultra = (text: string, frame: number, offset = 0): Run[] => {
+  const starts = cellsOf(text, offset)
+
+  return runsOf(text, i => {
+    const cell = starts[i] ?? offset
+
+    return {
+      color: rainbow(cell * 0.045 - frame * 0.05, glowAt(cell, frame)),
+      isBold: true,
+    }
+  })
+}
+
+/** 色なしの光に使う 3 段の明るさ(地・帯の縁・帯の芯)。 */
+const SHINE = ['#b4b4b4', '#dedede', '#ffffff'] as const
+
+/**
+ * アクセント: 色を付けずに、明るい帯だけを文字の上に走らせる。
+ * 帯は虹の行(`ultra`)と同じ 1 本。目立たせたい数か所だけに使う。
+ */
+export const shine = (
+  text: string,
+  frame: number,
+  isBold = false,
+  offset = 0,
+): Run[] => {
+  const starts = cellsOf(text, offset)
+
+  return runsOf(text, i => {
+    const glow = glowAt(starts[i] ?? offset, frame)
+
+    return glow >= 0.7
+      ? { color: SHINE[2], isBold: true }
+      : glow > 0
+        ? { color: SHINE[1], isBold }
+        : { color: SHINE[0], isBold }
+  })
 }
 
 export const PULSE = ['◌', '○', '◎', '◉', '◎', '○']

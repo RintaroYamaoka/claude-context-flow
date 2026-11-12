@@ -1,7 +1,7 @@
 // 流れの行の組み立て:ターンの並び → 章 → 描く行(本筋の節と、寄り道の枝)。
 // 下の「いま」の行、流れの窓の切り出し、飛ぶ先の行探しもここ。`$` は使わない。
 import type { Live, Step, Sub } from '../../types'
-import { METER_WIDTH, PULSE, hueAt, runsOf, ultra, wave } from './color'
+import { METER_WIDTH, PULSE, glowAt, hueAt, runsOf, ultra, wave } from './color'
 import type { Run } from './color'
 import { cells, clip, clock, wrapCells } from './text'
 
@@ -28,6 +28,8 @@ export type Line = {
   target?: Target & { id: string }
   /** 左の線の列の幅(枝の行は広い)。 */
   gutter?: number
+  /** アクセント(色なしの光を走らせる行)。いまの節の名前だけ。 */
+  isAccent?: boolean
 }
 
 export type Chapter = { name: string; isSide: boolean; first: number; last: number }
@@ -103,6 +105,7 @@ export const flowLines = (
         gutter,
         isNode: true,
         isStrong: isLast,
+        isAccent: isCurrent,
         runs: [{ text: name, isBold: isCurrent, isDim: !isCurrent }],
         right: tag,
         isRightQuiet: true,
@@ -113,6 +116,7 @@ export const flowLines = (
         rail: isCurrent ? '◉' : '●',
         isNode: true,
         isStrong: isLast,
+        isAccent: isCurrent,
         runs: [{ text: name, isBold: true }],
         right: tag,
         isRightQuiet: true,
@@ -152,8 +156,7 @@ export const flowLines = (
           gutter,
           isLive: true,
           runs: runsOf(`· ${title}`, index => ({
-            isDim:
-              Math.abs(index - ((frame * 1.6) % ([...title].length + 10))) > 2,
+            isDim: glowAt(gutter + index, frame) === 0,
           })),
           right: number,
           isRightQuiet: true,
@@ -237,7 +240,10 @@ export const footLines = (
             isDim: !isCurrent,
           },
         ],
-        rightRuns: isCurrent ? ultra(wave(frame), frame) : undefined,
+        // 波形は右端に置くので、色と光もその桁のものにする。
+        rightRuns: isCurrent
+          ? ultra(wave(frame), frame, 3 + text - METER_WIDTH)
+          : undefined,
       })
     })
   }
@@ -278,9 +284,10 @@ export const footLines = (
   // サブエージェント・経過時間)に、虹の流れと光の帯を乗せる。
   for (const line of foot) {
     const whole = line.runs.map(run => run.text).join('')
-    line.runs = ultra(whole, frame)
+    // 行の頭は、レールの列(3 桁)の右。右端のものは、文章の幅の右端に寄る。
+    line.runs = ultra(whole, frame, 3)
     if (line.right !== undefined) {
-      line.rightRuns = ultra(line.right, frame)
+      line.rightRuns = ultra(line.right, frame, 3 + text - cells(line.right))
       line.right = undefined
     }
   }
