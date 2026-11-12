@@ -4,7 +4,7 @@
 //   下  いま(走っているターン・ツール・サブエージェント)
 import type { EngineInterface, RenderInput } from 'claude-code'
 
-import { backgroundAt, hueAt, rainbow, runsOf, ultra } from '../domain/color'
+import { backgroundAt, glowAt, hueAt, rainbow, runsOf, shine, ultra } from '../domain/color'
 import { flowLines, footLines, windowOf } from '../domain/flow'
 import type { Line, Target } from '../domain/flow'
 import { cells, clip, formatTokens, modelName, wrapCells } from '../domain/text'
@@ -53,11 +53,9 @@ export function renderPane(
         ? `– / ${formatTokens(gauge.window)}`
         : `${formatTokens(gauge.tokens)} / ${formatTokens(gauge.window)}`
   const filled = Math.round((percent / 100) * columns)
-  // 埋まっている部分を、光の帯が左から右へ走る。
-  const glint = ((frame * 1.5) % (filled + 12)) - 3
+  // 埋まっている部分にも、文字と同じ光の帯が通る。
   const bar = runsOf('━'.repeat(filled), i => {
-    const far = Math.abs(i - glint)
-    const glow = far < 1.5 ? 0.75 : far < 3.5 ? 0.4 : 0
+    const glow = glowAt(i, frame)
 
     return {
       color: rainbow(i * 0.045 - frame * 0.05, glow),
@@ -120,6 +118,10 @@ export function renderPane(
             : undefined
     const isLit = railColor !== undefined
     const target = line.target
+    // アクセント: いまの節の名前だけ、色なしの光を走らせる。
+    const runs = line.isAccent
+      ? shine(line.runs.map(run => run.text).join(''), frame, true, line.gutter ?? 3)
+      : line.runs
 
     return (
       <Box flexDirection="row">
@@ -131,7 +133,7 @@ export function renderPane(
         <Box flexDirection="row" flexGrow={1} justifyContent="space-between">
           {target === undefined ? (
             <Box flexDirection="row">
-              {line.runs.map(run => (
+              {runs.map(run => (
                 <Text
                   bold={run.isBold}
                   color={run.color}
@@ -150,7 +152,7 @@ export function renderPane(
                 actions.jump(target)
               }}
             >
-              {line.runs.map(run => (
+              {runs.map(run => (
                 <Text bold={run.isBold} color={run.color} dimColor={run.isDim}>
                   {run.text}
                 </Text>
@@ -218,9 +220,16 @@ export function renderPane(
   for (const line of aimLines) {
     out.push(
       <Box flexDirection="row">
-        <Text bold={aim !== ''} dimColor={aim === ''}>
-          {line}
-        </Text>
+        {aim === '' ? (
+          <Text dimColor>{line}</Text>
+        ) : (
+          // アクセント: 目的の文に、色なしの光を走らせる。
+          shine(line, frame, true).map(part => (
+            <Text bold={part.isBold} color={part.color}>
+              {part.text}
+            </Text>
+          ))
+        )}
       </Box>,
     )
   }

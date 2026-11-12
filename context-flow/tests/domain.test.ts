@@ -2,7 +2,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { Step } from '../types'
-import { backgroundAt, paneBackground, pickPalette, rainbow, runsOf } from '../hooks/domain/color'
+import { backgroundAt, paneBackground, pickPalette, rainbow, runsOf, shine } from '../hooks/domain/color'
 import { chaptersOf, findRow, flowLines, footLines, windowOf } from '../hooks/domain/flow'
 import { applySegments, itemsOf, parseSegments, parseSummary, segmentPrompt, summaryPrompt, turnsOf } from '../hooks/domain/summary'
 import { actionOf, anchorOf, cells, clip, clock, formatTokens, modelName, oneLine, wrapCells } from '../hooks/domain/text'
@@ -253,4 +253,18 @@ test('飛ぶ先:行の id、発言の頭、依頼文に含まれるいちばん�
   expect(findRow({ anchor: '最初の依頼' }, rows)).toBe('r1')
   expect(findRow({ anchor: '無い', prompt: '最初の依頼 / 言い直しの長い版' }, rows)).toBe('r3')
   expect(findRow({ anchor: '無い', prompt: '関係ない文' }, rows)).toBeUndefined()
+})
+
+test('アクセントの光:色は付けず、明るい帯の芯だけ白の太字になる', () => {
+  // 中心が 10 文字目あたりに来る時刻。
+  // 帯は 1 コマに 3 桁進み、6 桁手前から入る。16 / 3 コマ目に、中心が 10 桁目に来る。
+  const runs = shine('abcdefghijklmnopqrst', 16 / 3)
+  expect(runs.map(run => run.text).join('')).toBe('abcdefghijklmnopqrst')
+  expect(runs.find(run => run.color === '#ffffff')?.isBold).toBe(true)
+  // 地・縁・芯の 3 段の灰色だけで、虹の色は使わない。
+  expect([...new Set(runs.map(run => run.color))].sort()).toEqual([
+    '#b4b4b4',
+    '#dedede',
+    '#ffffff',
+  ])
 })
