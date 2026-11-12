@@ -13,20 +13,20 @@
 .titlebar .d { width:12px; height:12px; border-radius:50%; }
 .titlebar .d.r{background:#f38ba8}.titlebar .d.y{background:#f9e2af}.titlebar .d.g{background:#a6e3a1}
 .titlebar .ttl { position:absolute; left:0; right:0; text-align:center; color:#a6adc8; font:500 18px/40px "JetBrains Mono","Noto Sans JP",monospace; }
-.body { position:absolute; top:40px; left:0; right:0; bottom:0; font:400 20px/30px "JetBrains Mono","Noto Sans JP",monospace; color:var(--tx); }
+.body { position:absolute; top:40px; left:0; right:0; bottom:0; font:400 18px/24px "JetBrains Mono","Noto Sans JP",monospace; color:var(--tx); }
 /* two columns: transcript (left) / context-flow (right) */
 .tx { position:absolute; left:0; top:0; bottom:0; width:924px; padding:0 18px; overflow:hidden; }
 .tx.full { width:1680px; }
 .vr { position:absolute; left:924px; top:0; bottom:0; width:1px; background:var(--line); transform-origin:50% 0; }
-.cp { position:absolute; left:925px; top:0; bottom:0; right:0; padding:0 0 0 24px; overflow:hidden; }
-.ln { white-space:pre; height:30px; overflow:hidden; position:relative; }
+.cp { position:absolute; left:925px; top:0; bottom:0; right:0; padding:0; overflow:hidden; }
+.ln { white-space:pre; height:24px; overflow:hidden; position:relative; }
 .ln.wrap { white-space:pre-wrap; height:auto; }
 /* colours */
 .now{color:var(--now)} .ok{color:var(--ok)} .bad{color:var(--bad)} .warn{color:var(--warn)}
 .app{color:var(--app)} .lib{color:var(--lib)} .db{color:var(--db)} .oth{color:var(--oth)}
 .dim{color:var(--dim)} .b{font-weight:700} .plus{color:var(--ok)} .minus{color:var(--bad)}
-.hl { position:absolute; left:-18px; right:-18px; top:0; height:30px; background:var(--sel); opacity:0; }
-.cur { display:inline-block; width:11px; height:22px; background:var(--tx); vertical-align:-4px; margin-left:1px; }
+.hl { position:absolute; left:-18px; right:-18px; top:0; height:24px; background:var(--sel); opacity:0; }
+.cur { display:inline-block; width:10px; height:19px; background:var(--tx); vertical-align:-4px; margin-left:1px; }
 .ch { opacity:0; }
 /* toast (Claude Code) */
 .toast { position:absolute; left:18px; width:888px; bottom:100px; padding:10px 16px; border:1px solid var(--line); border-radius:8px; background:#181825;
@@ -50,9 +50,9 @@
 .ln .v.off { opacity:0; }
 .tri2 { position:absolute; left:0; top:0; }
 .rel { position:relative; display:inline-block; }
-.txs { position:absolute; left:18px; right:18px; top:0; height:630px; overflow:hidden; }
+.txs { position:absolute; left:18px; right:18px; top:0; height:648px; overflow:hidden; }
 .txin { position:absolute; left:0; right:0; top:0; }
-.txb { position:absolute; left:18px; right:18px; bottom:0; height:90px; }
+.txb { position:absolute; left:18px; right:18px; bottom:0; height:72px; }
 .lab .n { display:inline-block; width:26px; height:26px; border-radius:50%; background:#1e1e2e; color:#f5f1e8; font:700 16px/26px "JetBrains Mono"; text-align:center; margin-right:8px; vertical-align:2px; }
 .lab.ac .n { background:#1e1e2e; color:var(--now); }
 
@@ -62,15 +62,25 @@
 
 .hg { display:inline-block; width:12px; height:20px; vertical-align:-3px; stroke:currentColor; fill:none; stroke-width:1.6; stroke-linecap:round; }
 
-/* context-flow のペイン(src/pane.js が描く)。58 桁 = 696px。全角は 2 桁ぶん(20px の字 + 字間 4px) */
-i.w { font-style:normal; letter-spacing:4px; }
-.ch.w { letter-spacing:4px; }
-.cp .ln { width:696px; }
-.cp .pl, .cp .ph { display:flex; width:696px; height:30px; }
+/* context-flow のペイン(src/pane.js が描く)。窓の中は 18px / 行 24px(30 行)。1 桁 10.8px。
+   ペインは 755px = 本文 65 桁(702px)+ 左右の余白。全角は 2 桁ぶん(18px の字 + 字間 3.6px)。背景は pane.js が配色の一色で塗る */
+i.w { font-style:normal; letter-spacing:3.6px; }
+.ch.w { letter-spacing:3.6px; }
+.cp .ln { width:755px; padding:0 26px 0 27px; }
+.cp .pl, .cp .ph, .cp .pc { display:flex; width:702px; height:24px; }
 .cp .ph { justify-content:space-between; }
-.cp .rail { flex:none; width:36px; }
+.cp .pc { justify-content:center; overflow:hidden; }
+.cp .rail { flex:none; white-space:pre; }
 .cp .lft { flex:1 1 auto; overflow:hidden; white-space:pre; }
 .cp .rgt { flex:none; white-space:pre; }
-/* バーの下に出す小さな目盛り */
-.chip { position:absolute; font:700 16px/26px "Noto Sans JP",sans-serif; color:#1b1b1f; background:#f5f1e8; padding:0 9px; border-radius:5px; white-space:nowrap; opacity:0; z-index:4; }
-.chip .tk { position:absolute; left:0; top:-12px; width:2px; height:12px; background:#f5f1e8; }
+/* 罫線と丸:1 桁(10.8px)x 1 行(24px)のマスに描く */
+.cp .bx { display:inline-block; position:relative; width:1ch; height:24px; vertical-align:top; }
+.cp .bx::before, .cp .bx::after { content:""; position:absolute; background:currentColor; }
+.cp .bx-v::before, .cp .bx-t::before { left:calc(50% - 1.5px); width:3px; top:0; bottom:0; }
+.cp .bx-l::before { left:calc(50% - 1.5px); width:3px; top:0; height:13.5px; }
+.cp .bx-t::after, .cp .bx-l::after { left:50%; right:0; top:10.5px; height:3px; }
+.cp .bx-h::before { left:0; right:0; top:10.5px; height:3px; }
+.cp .bx-hl::before { left:0; right:0; top:11.25px; height:1.5px; }
+.cp .bx-vl::before { left:calc(50% - 0.75px); width:1.5px; top:0; bottom:0; }
+.cp .bx-vd::before { left:calc(50% - 0.75px); width:1.5px; top:2px; bottom:2px; background:repeating-linear-gradient(to bottom, currentColor 0 4px, transparent 4px 8px); }
+.cp .dot { display:inline-flex; justify-content:center; width:1ch; font-weight:400; font-size:15px; line-height:24px; vertical-align:top; }
