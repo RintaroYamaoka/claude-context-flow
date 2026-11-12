@@ -5,6 +5,8 @@
 セッションが長くなると、いま何の話をしていて、ここまで何が決まったのかが、スクロールの向こうに消えていく。
 context-flow は、その「会話の流れ」をチャットの横に 1 枚で出し続ける。左の Claude Code は素のまま。
 
+▶ [紹介動画(100 秒)](./media/context-flow-intro.mp4)
+
 ```
   F A B L E   5 . 2          84.2k / 200k  42%
   ━━━━━━━━━━━━━━━━━──────────────────────────
@@ -57,6 +59,7 @@ claude plugin install context-flow --marketplace rintaroyamaoka/claude-context-f
 デスクトップアプリでは、プロンプト欄の横の + → Plugins → Add marketplace に `rintaroyamaoka/claude-context-flow` → Add plugin。
 
 ペインは自動で開く。閉じたあと・端末の幅が狭くて出なかったときは `/context-flow`。
+セッションの開始時と、ほかのペインのタブから切り替えたときに、起動アニメーションが流れる(`/context-flow boot` でもう一度)。
 
 ## 知っておくこと
 
@@ -73,6 +76,8 @@ claude --plugin-dir ./context-flow        # そのセッションだけ読み込
 claude plugin validate ./context-flow     # manifest と hooks module の検証
 npm run typecheck                         # tsc --noEmit(型は読み込み時にエンジンが置く)
 ```
+
+紹介動画のソースは [media/intro](./media/intro)(HyperFrames)。ペインの描き方を変えたら `media/intro/src/pane.js` も直す。
 
 ## ライセンス
 
