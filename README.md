@@ -6,7 +6,7 @@
 context-flow は、その「会話の流れ」をチャットの横に 1 枚で出し続ける。左の Claude Code は素のまま。
 
 
-
+https://github.com/user-attachments/assets/e4361666-6949-4b06-b985-c281294a8a9a
 
 
 ```
