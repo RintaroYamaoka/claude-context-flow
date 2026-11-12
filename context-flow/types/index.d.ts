@@ -56,7 +56,7 @@ declare module 'claude-code' {
       goal: string
       steps: Shaped<Step[]>
       live: Shaped<Live | null>
-      /** ターンが走っている間、1 秒ごとに進む時刻(経過時間とスピナー用)。 */
+      /** アニメーションのコマを進める時刻(約 33ms ごと)。描き直しのきっかけになる。 */
       beat: number
       /** 流れの窓が、最新から何行さかのぼっているか(0 = 最新を追う)。 */
       scroll: number
