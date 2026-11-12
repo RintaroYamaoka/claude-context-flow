@@ -74,7 +74,7 @@ claude plugin install context-flow --marketplace rintaroyamaoka/claude-context-f
 ペインは自動で開く。閉じたあと・端末の幅が狭くて出なかったときは `/context-flow`。
 セッションの開始時と、ほかのペインのタブから切り替えたときに、起動アニメーションが流れる(`/context-flow boot` でもう一度)。
 
-背景は、上から下へ暗くなるグラデーション。配色は `/context-flow bg <名前>` で変えられる(名前なしで次の配色へ。選んだものは次のセッションにも残る)。
+背景は、ペイン全体を一色で塗る。配色は `/context-flow bg <名前>` で変えられる(名前なしで次の配色へ。選んだものは次のセッションにも残る)。
 
 | 名前 | 配色 |
 | --- | --- |
@@ -83,7 +83,7 @@ claude plugin install context-flow --marketplace rintaroyamaoka/claude-context-f
 | `murasaki` | 紫 |
 | `mori` | 深緑 |
 | `akane` | 茜 |
-| `yoake` | 夜明け(濃紺から暗い紅紫へ) |
+| `yoake` | 夜明け(暗い紫紺) |
 | `umi` | 深海 |
 | `none` | 背景なし |
 
@@ -100,8 +100,11 @@ claude plugin install context-flow --marketplace rintaroyamaoka/claude-context-f
 ```
 claude --plugin-dir ./context-flow        # そのセッションだけ読み込む(保存で再読み込み)
 claude plugin validate ./context-flow     # manifest と hooks module の検証
+claude plugin test ./context-flow         # 単体テストと、ペインを描くテスト
 npm run typecheck                         # tsc --noEmit(型は読み込み時にエンジンが置く)
 ```
+
+コードは `context-flow/hooks/` にある。`register.tsx` が配線、`store.ts` が状態、`domain/` が純粋なロジック、`app/` がエンジンを呼ぶ処理、`ui/` が描画。
 
 紹介動画のソースは [media/intro](./media/intro)(HyperFrames)。ペインの描き方を変えたら `media/intro/src/pane.js` も直す。
 
