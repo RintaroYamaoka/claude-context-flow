@@ -100,6 +100,57 @@ const runsOf = (
   return runs
 }
 
+// ── 背景 ──
+// ペイン全体を、上の色から下の色へ向かう縦のグラデーションで塗る。
+// 配色は `/context-flow bg <名前>` で切り替える(名前なしで次の配色へ)。
+type Rgb = readonly [number, number, number]
+type Palette = { label: string; top: Rgb; bottom: Rgb }
+const PALETTES: Record<string, Palette | null> = {
+  navy: { label: '濃紺', top: [16, 26, 51], bottom: [5, 7, 13] },
+  sumi: { label: '墨', top: [30, 30, 34], bottom: [10, 10, 12] },
+  murasaki: { label: '紫', top: [36, 20, 56], bottom: [8, 5, 14] },
+  mori: { label: '深緑', top: [10, 36, 32], bottom: [4, 9, 9] },
+  akane: { label: '茜', top: [52, 18, 28], bottom: [12, 5, 8] },
+  yoake: { label: '夜明け', top: [14, 22, 50], bottom: [44, 20, 38] },
+  umi: { label: '深海', top: [6, 34, 48], bottom: [3, 8, 16] },
+  none: null,
+}
+const PALETTE_NAMES = Object.keys(PALETTES)
+/** いまの配色の名前。読み込み時に、前に選んだものを戻す。 */
+let paletteName = 'sumi'
+
+const hexOf = (rgb: readonly number[]): string =>
+  `#${rgb.map(v => Math.round(Math.min(255, Math.max(0, v))).toString(16).padStart(2, '0')).join('')}`
+
+/** 行ごとに塗れない所(枠のすき間など)に敷く色。グラデーションの中ほど。 */
+const paneBackground = (): string => {
+  const palette = PALETTES[paletteName]
+  if (palette === null || palette === undefined) return 'transparent'
+
+  return hexOf([0, 1, 2].map(c => ((palette.top[c] ?? 0) + (palette.bottom[c] ?? 0)) / 2))
+}
+
+/** 上から `row` 行目(全 `total` 行)の背景色。`isBand` なら少し明るくする。 */
+const backgroundAt = (
+  row: number,
+  total: number,
+  isBand = false,
+): string | undefined => {
+  const palette = PALETTES[paletteName]
+  if (palette === null || palette === undefined) return undefined
+  const k = total <= 1 ? 0 : row / (total - 1)
+
+  return hexOf(
+    [0, 1, 2].map(c => {
+      const base =
+        (palette.top[c] ?? 0) + ((palette.bottom[c] ?? 0) - (palette.top[c] ?? 0)) * k
+
+      // 帯は、その行の色を白へ 9% 寄せる。
+      return isBand ? base + (255 - base) * 0.09 : base
+    }),
+  )
+}
+
 const PULSE = ['◌', '○', '◎', '◉', '◎', '○']
 // ── 虹の流れ ──
 // 色は Claude Code 本体の虹(テーマの rainbow_*)と同じ 7 色。
@@ -583,10 +634,13 @@ export const register: Register = on => {
     await $.command.register({
       name: 'context-flow',
       description:
-        'セッションの会話の流れ・モデル・コンテキスト量のペインを開く(boot を付けると起動アニメーションを再生)',
+        'セッションの会話の流れ・モデル・コンテキスト量のペインを開く(boot で起動アニメーションを再生、bg で背景の配色を切り替え)',
     })
+    // 前に選んだ背景の配色を戻す。
+    const saved = await $.store.get('background').catch(() => undefined)
+    if (typeof saved === 'string' && saved in PALETTES) paletteName = saved
     hasOpened = true
-    void $.ui.open({ id: PANE, title: TITLE })
+    void $.ui.open({ id: PANE, title: TITLE, backgroundColor: paneBackground() })
     $.clock.every(TICK_MS, () => {
       void tick($)
     })
@@ -645,14 +699,38 @@ export const register: Register = on => {
   on('ui.open', async ($, e, next) => {
     if (e.id !== PANE && !hasOpened) {
       hasOpened = true
-      await $.ui.open({ id: PANE, title: TITLE }).catch(() => undefined)
+      await $.ui.open({ id: PANE, title: TITLE, backgroundColor: paneBackground() }).catch(() => undefined)
     }
 
     return next(e)
   })
 
   on('command.run', { command: 'context-flow' }, async ($, e) => {
-    await $.ui.open({ id: PANE, title: TITLE })
+    // `/context-flow bg <名前>` で背景の配色を変える。名前なしなら次の配色へ。
+    const picked = /\bbg\b\s*(\S*)/.exec(String(e.args ?? ''))
+    if (picked !== null) {
+      const asked = picked[1] ?? ''
+      const byLabel = PALETTE_NAMES.find(name => PALETTES[name]?.label === asked)
+      const next =
+        asked === ''
+          ? PALETTE_NAMES[(PALETTE_NAMES.indexOf(paletteName) + 1) % PALETTE_NAMES.length]
+          : asked in PALETTES
+            ? asked
+            : byLabel
+      const names = PALETTE_NAMES.map(
+        name => `${name}(${PALETTES[name]?.label ?? '背景なし'})`,
+      ).join(' / ')
+      if (next === undefined) return { text: `その配色はありません。選べるのは: ${names}` }
+      paletteName = next
+      await $.store.set('background', next).catch(() => undefined)
+      await $.ui.open({ id: PANE, title: TITLE, backgroundColor: paneBackground() })
+      fastUntil = Date.now() + 500
+
+      return {
+        text: `背景を ${next}(${PALETTES[next]?.label ?? '背景なし'})にしました。選べるのは: ${names}`,
+      }
+    }
+    await $.ui.open({ id: PANE, title: TITLE, backgroundColor: paneBackground() })
     // `/context-flow boot` で、起動アニメーションをもう一度流す。
     if (/\bboot\b/.test(String(e.args ?? ''))) {
       await playBoot($)
@@ -845,6 +923,8 @@ export const register: Register = on => {
       target?: Target & { id: string }
       /** 左の線の列の幅(枝の行は広い)。 */
       gutter?: number
+      /** 現在地の帯(背景を少し明るくする行)。 */
+      isBand?: boolean
     }
 
     // ── 固定ヘッダー: 計器と目的 ──
@@ -1002,6 +1082,8 @@ export const register: Register = on => {
     const TRUNK = 3 // 本筋の線の列の幅
     const BRANCH = 6 // 枝の行の、線の列の幅(┣━━○ と空き)
     const all: Line[] = []
+    /** いまの節が始まる行。ここから下が現在地の帯。 */
+    let bandFrom = Infinity
     chapters.forEach((chapter, c) => {
       const isCurrent = c === chapters.length - 1
       const isLast = isCurrent && running === null
@@ -1020,6 +1102,7 @@ export const register: Register = on => {
 
       // 本筋の節の前には、線だけの 1 行を置いて間を空ける(枝は詰めてぶら下げる)。
       if (!chapter.isSide && all.length > 0) all.push({ rail: '┃', runs: [] })
+      if (isCurrent) bandFrom = all.length
       if (chapter.isSide) {
         // 枝: 本筋から右へ出る。最後の章が枝なら、線はそこで曲がって終わる。
         all.push({
@@ -1121,6 +1204,11 @@ export const register: Register = on => {
       if (running !== null) all.push({ rail: chapter.isSide ? '   │' : '┃', gutter, runs: [] })
     })
 
+    all.forEach((line, i) => {
+      if (i >= bandFrom) line.isBand = true
+    })
+    for (const line of foot) line.isBand = true
+
     const total = all.length
     const window = Math.max(3, room - headRows - foot.length)
     maxScroll = Math.max(0, total - window)
@@ -1214,8 +1302,12 @@ export const register: Register = on => {
       )
     }
 
-    const view = (
-      <Box flexDirection="column" paddingX={2} paddingTop={1}>
+    // 画面を 1 行ずつの並びに組む(行ごとに背景色を変えるため)。
+    type Row = { cell?: ReturnType<typeof draw>; isBand?: boolean }
+    const out: Row[] = []
+    out.push({})
+    out.push({
+      cell: (
         <Box flexDirection="row" justifyContent="space-between">
           <Box flexDirection="row">
             {ultra(nameText, frame).map(run => (
@@ -1231,6 +1323,10 @@ export const register: Register = on => {
             </Text>
           </Box>
         </Box>
+      ),
+    })
+    out.push({
+      cell: (
         <Box flexDirection="row">
           {bar.map(run => (
             <Text bold={run.isBold} color={run.isBold ? run.color : (tone ?? run.color)}>
@@ -1239,36 +1335,70 @@ export const register: Register = on => {
           ))}
           <Text dimColor>{'─'.repeat(columns - filled)}</Text>
         </Box>
-
-        <Box flexDirection="column" marginTop={1} marginBottom={1}>
+      ),
+    })
+    out.push({})
+    out.push({
+      cell: (
+        <Box flexDirection="row">
           <Text dimColor>目的</Text>
-          {aimLines.map(line => (
+        </Box>
+      ),
+    })
+    for (const line of aimLines) {
+      out.push({
+        cell: (
+          <Box flexDirection="row">
             <Text bold={aim !== ''} dimColor={aim === ''}>
               {line}
             </Text>
-          ))}
-        </Box>
-
-        {decidedShown.length + openShown.length > 0 && (
-          <Box flexDirection="column" marginBottom={1}>
-            {decidedShown.length > 0 && <Text dimColor>決まったこと</Text>}
-            {decidedShown.map(item => (
-              <Box flexDirection="row">
-                <Text color="success">✓ </Text>
-                <Text wrap="truncate-end">{clip(item, columns - 2)}</Text>
-              </Box>
-            ))}
-            {openShown.length > 0 && <Text dimColor>残っていること</Text>}
-            {openShown.map(item => (
-              <Box flexDirection="row">
-                <Text dimColor>· </Text>
-                <Text wrap="truncate-end">{clip(item, columns - 2)}</Text>
-              </Box>
-            ))}
           </Box>
-        )}
-
-        <Box flexDirection="row" justifyContent="space-between" marginBottom={1}>
+        ),
+      })
+    }
+    out.push({})
+    if (decidedShown.length > 0) {
+      out.push({
+        cell: (
+          <Box flexDirection="row">
+            <Text dimColor>決まったこと</Text>
+          </Box>
+        ),
+      })
+    }
+    for (const item of decidedShown) {
+      out.push({
+        cell: (
+          <Box flexDirection="row">
+            <Text color="success">✓ </Text>
+            <Text wrap="truncate-end">{clip(item, columns - 2)}</Text>
+          </Box>
+        ),
+      })
+    }
+    if (openShown.length > 0) {
+      out.push({
+        cell: (
+          <Box flexDirection="row">
+            <Text dimColor>残っていること</Text>
+          </Box>
+        ),
+      })
+    }
+    for (const item of openShown) {
+      out.push({
+        cell: (
+          <Box flexDirection="row">
+            <Text dimColor>· </Text>
+            <Text wrap="truncate-end">{clip(item, columns - 2)}</Text>
+          </Box>
+        ),
+      })
+    }
+    if (decidedShown.length + openShown.length > 0) out.push({})
+    out.push({
+      cell: (
+        <Box flexDirection="row" justifyContent="space-between">
           <Text dimColor>流れ</Text>
           <Text bold>
             {running !== null
@@ -1276,14 +1406,57 @@ export const register: Register = on => {
               : `${list.length} ターン`}
           </Text>
         </Box>
+      ),
+    })
+    out.push({})
+    if (list.length === 0 && running === null) {
+      out.push({
+        cell: (
+          <Box flexDirection="row">
+            <Text dimColor>最初のターンが終わると、ここに流れが並びます。</Text>
+          </Box>
+        ),
+      })
+    }
+    if (hasAbove) {
+      out.push({
+        cell: (
+          <Box flexDirection="row">
+            <Text dimColor>{`┆  ↑ 上に ${above} 行`}</Text>
+          </Box>
+        ),
+      })
+    }
+    lines.forEach((line, row) => {
+      out.push({ cell: draw(line, row), isBand: line.isBand })
+    })
+    if (hasBelow) {
+      out.push({
+        cell: (
+          <Box flexDirection="row">
+            <Text dimColor>{`┆  ↓ 下に ${below} 行`}</Text>
+          </Box>
+        ),
+      })
+    }
+    foot.forEach((line, row) => {
+      out.push({ cell: draw(line, lines.length + row), isBand: true })
+    })
+    // 下の余りも塗って、ペインの底まで背景を続ける。
+    while (out.length < room) out.push({})
 
-        {list.length === 0 && running === null && (
-          <Text dimColor>最初のターンが終わると、ここに流れが並びます。</Text>
-        )}
-        {hasAbove && <Text dimColor>{`┆  ↑ 上に ${above} 行`}</Text>}
-        {lines.map((line, row) => draw(line, row))}
-        {hasBelow && <Text dimColor>{`┆  ↓ 下に ${below} 行`}</Text>}
-        {foot.map((line, row) => draw(line, lines.length + row))}
+    const view = (
+      <Box flexDirection="column">
+        {out.map((row, i) => (
+          <Box
+            flexDirection="column"
+            width={e.props.bodyColumns}
+            paddingX={2}
+            backgroundColor={backgroundAt(i, out.length)}
+          >
+            {row.cell ?? <Text> </Text>}
+          </Box>
+        ))}
       </Box>
     )
 
@@ -1325,6 +1498,9 @@ export const register: Register = on => {
       <Box
         flexDirection="column"
         alignItems="center"
+        width={e.props.bodyColumns}
+        height={room}
+        backgroundColor={backgroundAt(0, 2)}
         paddingX={2}
         paddingTop={Math.max(1, Math.floor((room - 7) / 2))}
       >
