@@ -56,6 +56,8 @@ declare module 'claude-code' {
       beat: number
       /** 流れの窓が、最新から何行さかのぼっているか(0 = 最新を追う)。 */
       scroll: number
+      /** セッションが始まった時刻。ここから起動アニメーションが流れる。 */
+      boot: number
       agents: Shaped<Sub[]>
       /** 発言の頭 → トランスクリプトの行。再読み込みをまたいで覚えておく。 */
       rows: Record<string, string>

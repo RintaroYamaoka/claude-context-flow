@@ -15,6 +15,10 @@ const BEAT_MS = 16
 const FRAME_MS = 200
 /** 待機中は、このコマ数に 1 回だけ進める(ゆっくり呼吸する)。 */
 const IDLE_EVERY = 60
+/** 起動アニメーション: タイトルが出ている時間と、そのあと画面が開く時間。 */
+const SPLASH_MS = 1900
+const REVEAL_MS = 700
+const WORDMARK = 'c o n t e x t   f l o w'
 /** 要約の文字が打ち出される速さ(1 文字あたりのミリ秒)。 */
 const TYPE_MS = 18
 const MAX_STEPS = 200
@@ -32,6 +36,7 @@ const live = atom({ plugin: 'context-flow', key: 'live' } as const, null, {
 })
 const beat = atom({ plugin: 'context-flow', key: 'beat' } as const, 0)
 const scroll = atom({ plugin: 'context-flow', key: 'scroll' } as const, 0)
+const boot = atom({ plugin: 'context-flow', key: 'boot' } as const, 0)
 const rows = atom({ plugin: 'context-flow', key: 'rows' } as const, {})
 const agents = atom({ plugin: 'context-flow', key: 'agents' } as const, [], {
   shape: 'agents-1',
@@ -404,6 +409,18 @@ type Target = { id?: string; rowId?: string; anchor?: string; prompt?: string }
 /** 流れをさかのぼれる最大の行数。描くたびに更新する。 */
 let maxScroll = 0
 
+/** このペインが、いま表に出ているタブか(まだ分からない間は undefined)。 */
+let isShown: boolean | undefined
+/** このセッションで、自分のペインをもう開いたか。 */
+let hasOpened = false
+
+/** 起動アニメーションを最初から流す。終わるまでは毎コマ描く。 */
+const playBoot = async ($: EngineInterface): Promise<void> => {
+  const bootAt = Date.now()
+  fastUntil = bootAt + SPLASH_MS + REVEAL_MS + 400
+  await update($, boot, () => bootAt)
+}
+
 let isSummarizing = false
 let isRunning = false
 /** 返答の前に中断されたターンの依頼。次のターンの依頼の頭に付ける。 */
@@ -480,8 +497,9 @@ export const register: Register = on => {
     await $.command.register({
       name: 'context-flow',
       description:
-        'セッションの会話の流れ・モデル・コンテキスト量のペインを開く',
+        'セッションの会話の流れ・モデル・コンテキスト量のペインを開く(boot を付けると起動アニメーションを再生)',
     })
+    hasOpened = true
     void $.ui.open({ id: PANE, title: TITLE })
     $.clock.every(TICK_MS, () => {
       void tick($)
@@ -489,15 +507,37 @@ export const register: Register = on => {
     // アニメーションのコマ送り。走っている間と、要約が届いた直後は毎コマ、
     // 待機中は数コマに 1 回だけ進める。
     isRunning = (await read($, live)) !== null
+    await playBoot($)
     // 前に覚えた行を戻す(再読み込みで消えるため)。
     for (const [anchor, id] of Object.entries(await read($, rows))) {
       if (!rowIds.has(anchor)) rowIds.set(anchor, id)
     }
     let count = 0
     let isBeating = false
+    let isLooking = false
     $.clock.every(BEAT_MS, () => {
       count++
       const now = Date.now()
+      // 0.1 秒ごとに、自分のタブが表に出ているかを見る。
+      // 裏から表に切り替わった瞬間に、起動アニメーションを流す。
+      if (count % 6 === 0 && !isLooking) {
+        isLooking = true
+        void $.ui
+          .panes()
+          .then(async panes => {
+            const mine = panes.find(pane => pane.id === PANE)
+            const shown = mine !== undefined && mine.isShown && mine.isPlaced
+            const wasHidden = isShown === false
+            isShown = shown
+            if (shown && wasHidden) await playBoot($)
+          })
+          .catch(() => undefined)
+          .then(() => {
+            isLooking = false
+          })
+      }
+      // 裏に回っている間は描かない。
+      if (isShown === false) return
       const isBusy = isRunning || hasAgents || now <= fastUntil
       if (!isBusy && count % IDLE_EVERY !== 0) return
       // 前のコマがまだ書き終わっていなければ、このコマは飛ばす(溜めない)。
@@ -514,8 +554,24 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('command.run', { command: 'context-flow' }, async $ => {
+  // ほかの mod がペインを開く前に、自分のペインを先に開く(タブの並びで先頭に来るように)。
+  on('ui.open', async ($, e, next) => {
+    if (e.id !== PANE && !hasOpened) {
+      hasOpened = true
+      await $.ui.open({ id: PANE, title: TITLE }).catch(() => undefined)
+    }
+
+    return next(e)
+  })
+
+  on('command.run', { command: 'context-flow' }, async ($, e) => {
     await $.ui.open({ id: PANE, title: TITLE })
+    // `/context-flow boot` で、起動アニメーションをもう一度流す。
+    if (/\bboot\b/.test(String(e.args ?? ''))) {
+      await playBoot($)
+
+      return { text: '起動アニメーションを流しました。' }
+    }
 
     return { text: 'Context ペインを開きました。' }
   })
@@ -663,7 +719,7 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Button, Text } = $.ui.resolve(e)
-    const [gauge, aim, list, running, now, back, subs] = await Promise.all([
+    const [gauge, aim, list, running, now, back, subs, bootAt] = await Promise.all([
       read($, meter),
       read($, goal),
       read($, steps),
@@ -671,6 +727,7 @@ export const register: Register = on => {
       read($, beat),
       read($, scroll),
       read($, agents),
+      read($, boot),
     ])
     // 左右に 2 桁ずつの余白を取る。
     const columns = Math.max(24, e.props.bodyColumns - 4)
@@ -996,7 +1053,7 @@ export const register: Register = on => {
       )
     }
 
-    return (
+    const view = (
       <Box flexDirection="column" paddingX={2} paddingTop={1}>
         <Box flexDirection="row" justifyContent="space-between">
           <Box flexDirection="row">
@@ -1047,6 +1104,73 @@ export const register: Register = on => {
         {lines.map((line, row) => draw(line, row))}
         {hasBelow && <Text dimColor>{`┆  ↓ 後に ${below} ターン`}</Text>}
         {foot.map((line, row) => draw(line, lines.length + row))}
+      </Box>
+    )
+
+    // ── 起動アニメーション ──
+    // セッションが始まってから少しの間、タイトルが打ち出され、線が中央から開き、
+    // 波が立ってから、画面が上から下へ開く。
+    const sinceBoot = bootAt === 0 ? Infinity : Math.max(0, now - bootAt)
+    if (sinceBoot >= SPLASH_MS + REVEAL_MS) return view
+    if (sinceBoot >= SPLASH_MS) {
+      const k = (sinceBoot - SPLASH_MS) / REVEAL_MS
+      const eased = 1 - (1 - k) * (1 - k) * (1 - k)
+
+      return (
+        <Box
+          flexDirection="column"
+          height={Math.max(1, Math.round(room * eased))}
+          overflow="hidden"
+        >
+          {view}
+        </Box>
+      )
+    }
+
+    const clamp = (v: number): number => Math.min(1, Math.max(0, v))
+    const typed = [...WORDMARK].slice(0, Math.floor(sinceBoot / 40)).join('')
+    const isTyping = typed.length < WORDMARK.length
+    const opened = clamp((sinceBoot - 150) / 800)
+    const half = Math.round((1 - (1 - opened) * (1 - opened)) * (columns / 2))
+    // 波の高さは、立ち上がってから静まる。
+    const swell = Math.sin(Math.PI * clamp((sinceBoot - 350) / 1450))
+    const crest = Array.from({ length: columns }, (_, c) => {
+      const level = swell * ((Math.sin(frame * 1.3 + c * 0.42) + 1) / 2)
+
+      return BARS[Math.round(level * (BARS.length - 1))] ?? '▁'
+    }).join('')
+    const status = sinceBoot < 1250 ? '会話の流れを読み込み中' : '準備完了'
+
+    return (
+      <Box
+        flexDirection="column"
+        alignItems="center"
+        paddingX={2}
+        paddingTop={Math.max(1, Math.floor((room - 7) / 2))}
+      >
+        <Box flexDirection="row">
+          {ultra(typed === '' ? ' ' : typed, frame).map(run => (
+            <Text bold color={run.color}>
+              {run.text}
+            </Text>
+          ))}
+          {isTyping && <Text color={hue()}>▍</Text>}
+        </Box>
+        <Box flexDirection="row" marginTop={1}>
+          {ultra('━'.repeat(Math.max(1, half * 2)), frame).map(run => (
+            <Text bold color={run.color}>
+              {run.text}
+            </Text>
+          ))}
+        </Box>
+        <Box flexDirection="row" marginTop={1}>
+          {ultra(crest, frame).map(run => (
+            <Text color={run.color}>{run.text}</Text>
+          ))}
+        </Box>
+        <Box marginTop={1}>
+          <Text dimColor>{status}</Text>
+        </Box>
       </Box>
     )
   })
