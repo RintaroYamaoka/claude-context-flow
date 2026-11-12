@@ -99,45 +99,57 @@ const runsOf = (
 }
 
 const PULSE = ['◌', '○', '◎', '◉', '◎', '○']
-// ── ultracode と同じ見た目 ──
-// Claude Code 本体が、実行中の虹色のラベルに使っている色と動きをそのまま使う
-// (本体 2.1.322 のテーマ rainbow_* と、タスク一覧の実行中ラベルの描き方から):
-//   - 文字ごとに 7 色を順に繰り返す
-//   - 0.24 秒ごとに、色の並び全体が 1 文字ぶんずれていく
-//   - 光の帯は無い
-const RAINBOW = [
-  '#eb5f57',
-  '#f58b57',
-  '#fac35f',
-  '#91c882',
-  '#82aadc',
-  '#9b82c8',
-  '#c882b4',
-] as const
-const RAINBOW_SHIMMER = [
-  '#fa9b93',
-  '#ffb989',
-  '#ffe19b',
-  '#b9e6b4',
-  '#b4cdf0',
-  '#c3b4e6',
-  '#e6b4d2',
-] as const
-/** 色の並びが 1 文字ぶんずれる間隔(本体は 80ms × 3)。 */
-const PHASE_STEP_MS = 240
+// ── 虹の流れ ──
+// 色は Claude Code 本体の虹(テーマの rainbow_*)と同じ 7 色。
+// 色が文字の上をなめらかに左へ流れ続け、その上を明るい帯が右へ走る。
+const RAINBOW: readonly (readonly [number, number, number])[] = [
+  [235, 95, 87],
+  [245, 139, 87],
+  [250, 195, 95],
+  [145, 200, 130],
+  [130, 170, 220],
+  [155, 130, 200],
+  [200, 130, 180],
+]
 
-/** いまの色のずれ(0〜6)。`frame` は FRAME_MS を単位にした時刻。 */
-const phaseAt = (frame: number): number =>
-  Math.floor((frame * FRAME_MS) / PHASE_STEP_MS) % 7
+const hex = (rgb: readonly [number, number, number]): string =>
+  `#${rgb.map(v => Math.round(v).toString(16).padStart(2, '0')).join('')}`
 
-/** `index` 番目の文字の色。`isLit` なら明るい方(レールを落ちる光に使う)。 */
-const rainbowAt = (index: number, isLit = false): string =>
-  (isLit ? RAINBOW_SHIMMER : RAINBOW)[((index % 7) + 7) % 7] ?? RAINBOW[0]
+// 虹の刻み。隣り合う色の差が目に見えない細かさにする(毎コマ計算した色と同じに見える)。
+const SHADES = 720
+/** 白への寄せ方 3 段(なし・帯の縁・帯の芯)× 虹を一周する SHADES 色。起動時に 1 度だけ作る。 */
+const PALETTE: readonly (readonly string[])[] = [0, 0.4, 0.75].map(glow =>
+  Array.from({ length: SHADES }, (_, n) => {
+    const x = (n / SHADES) * RAINBOW.length
+    const i = Math.floor(x) % RAINBOW.length
+    const a = RAINBOW[i] ?? [0, 0, 0]
+    const b = RAINBOW[(i + 1) % RAINBOW.length] ?? a
+    const k = x - Math.floor(x)
+    const mix = (c: 0 | 1 | 2): number => {
+      const v = a[c] + (b[c] - a[c]) * k
 
-/** `index` 番目の文字の見た目: 7 色の繰り返しが、時間とともに 1 文字ずつずれる。 */
-const ultraAt = (index: number, _length: number, frame: number): Omit<Run, 'text'> => ({
-  color: rainbowAt(index + phaseAt(frame)),
-})
+      return v + (255 - v) * glow
+    }
+
+    return hex([mix(0), mix(1), mix(2)])
+  }),
+)
+
+/** 虹を一周する色。`t` は何周目でもよい。`glow` で白に寄せる(0・0.4・0.75 の 3 段)。 */
+const rainbow = (t: number, glow = 0): string => {
+  const n = Math.floor((((t % 1) + 1) % 1) * SHADES) % SHADES
+
+  return PALETTE[glow >= 0.7 ? 2 : glow > 0 ? 1 : 0]?.[n] ?? '#ffffff'
+}
+
+/** `index` 桁目の文字の見た目: 虹が左へ流れ、明るい帯が右へ走る。 */
+const ultraAt = (index: number, length: number, frame: number): Omit<Run, 'text'> => {
+  const center = ((frame * 2.2) % (length + 16)) - 6
+  const far = Math.abs(index - center)
+  const glow = far < 1.2 ? 0.75 : far < 3 ? 0.4 : 0
+
+  return { color: rainbow(index * 0.045 - frame * 0.05, glow), isBold: true }
+}
 
 const ultra = (text: string, frame: number): Run[] => {
   const length = [...text].length
@@ -800,8 +812,17 @@ export const register: Register = on => {
           ? `– / ${formatTokens(gauge.window)}`
           : `${formatTokens(gauge.tokens)} / ${formatTokens(gauge.window)}`
     const filled = Math.round((percent / 100) * columns)
-    // 埋まっている部分も、文字と同じ 7 色のずれで描く。
-    const bar = ultra('━'.repeat(filled), frame)
+    // 埋まっている部分を、光の帯が左から右へ走る。
+    const glint = ((frame * 1.5) % (filled + 12)) - 3
+    const bar = runsOf('━'.repeat(filled), i => {
+      const far = Math.abs(i - glint)
+      const glow = far < 1.5 ? 0.75 : far < 3.5 ? 0.4 : 0
+
+      return {
+        color: rainbow(i * 0.045 - frame * 0.05, glow),
+        isBold: glow > 0,
+      }
+    })
     const aimLines = wrapCells(
       aim || (list.length > 0 ? '読み取り中…' : 'まだ会話がありません'),
       columns,
@@ -818,9 +839,9 @@ export const register: Register = on => {
           : model.name
     // 上の余白 1 行+計器 2 行+空行+目的+空行+流れの見出し+空行。
     const headRows = 1 + 2 + 1 + 1 + aimLines.length + 1 + 1 + 1
-    /** 1 色で塗るもの(レール・カーソル)の色。文字と同じずれに乗せる。 */
+    /** いまの虹の色(1 色で塗るもの用)。全体で同じ流れに乗せる。 */
     const hue = (index = 0, glow = 0): string =>
-      rainbowAt(index + phaseAt(frame), glow > 0)
+      rainbow(index * 0.045 - frame * 0.05, glow)
 
     // ── 固定フッター: いま ──
     const actions = running?.actions.slice(-3) ?? []
@@ -1022,11 +1043,11 @@ export const register: Register = on => {
       // レールも同じ虹に乗せる。落ちてくる光の頭ほど白に近い。
       const railColor =
         far === 0
-          ? hue(row, 0.75)
+          ? hue(row * 2, 0.75)
           : far === 1
-            ? hue(row, 0.4)
+            ? hue(row * 2, 0.4)
             : line.isLive || line.isStrong || far === 2
-              ? hue(row)
+              ? hue(row * 2)
               : undefined
       const isLit = railColor !== undefined
       const target = line.target
@@ -1080,7 +1101,7 @@ export const register: Register = on => {
               <Text dimColor>{line.right}</Text>
             )}
             {line.right !== undefined && !line.isRightQuiet && (
-              <Text color={hue(text)}>
+              <Text bold color={hue(text)}>
                 {line.right}
               </Text>
             )}
@@ -1094,7 +1115,7 @@ export const register: Register = on => {
         <Box flexDirection="row" justifyContent="space-between">
           <Box flexDirection="row">
             {ultra(nameText, frame).map(run => (
-              <Text color={run.color}>
+              <Text bold color={run.color}>
                 {run.text}
               </Text>
             ))}
@@ -1108,7 +1129,7 @@ export const register: Register = on => {
         </Box>
         <Box flexDirection="row">
           {bar.map(run => (
-            <Text color={tone ?? run.color}>
+            <Text bold={run.isBold} color={run.isBold ? run.color : (tone ?? run.color)}>
               {run.text}
             </Text>
           ))}
@@ -1186,7 +1207,7 @@ export const register: Register = on => {
       >
         <Box flexDirection="row">
           {ultra(typed === '' ? ' ' : typed, frame).map(run => (
-            <Text color={run.color}>
+            <Text bold color={run.color}>
               {run.text}
             </Text>
           ))}
@@ -1194,7 +1215,7 @@ export const register: Register = on => {
         </Box>
         <Box flexDirection="row" marginTop={1}>
           {ultra('━'.repeat(Math.max(1, half * 2)), frame).map(run => (
-            <Text color={run.color}>
+            <Text bold color={run.color}>
               {run.text}
             </Text>
           ))}
