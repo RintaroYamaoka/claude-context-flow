@@ -54,6 +54,7 @@ export async function startSession($: EngineInterface): Promise<void> {
     name: 'context-flow',
     description:
       'セッションの会話の流れ・モデル・コンテキスト量のペインを開く(boot で起動アニメーションを再生、bg で背景の配色、color で流れの色を切り替え)',
+    argumentHint: '[boot | bg <名前> | color <名前>]',
   })
   // 前に選んだ背景の配色を戻す。
   const saved = await $.store.get('backdrop').catch(() => undefined)
