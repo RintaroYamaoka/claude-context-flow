@@ -71,10 +71,26 @@ claude plugin install context-flow --marketplace rintaroyamaoka/claude-context-f
 `Add marketplace?` に `y`、scope は user を選ぶ。
 デスクトップアプリでは、プロンプト欄の横の + → Plugins → Add marketplace に `rintaroyamaoka/claude-context-flow` → Add plugin。
 
-ペインは自動で開く。閉じたあと・端末の幅が狭くて出なかったときは `/context-flow`。
-セッションの開始時と、ほかのペインのタブから切り替えたときに、起動アニメーションが流れる(`/context-flow boot` でもう一度)。
+ペインは自動で開く。設定は要らない。
 
-背景は、既定では塗らない(端末の地の色のまま)。`/context-flow bg <名前>` で、ペイン全体を一色で塗れる(名前なしで次の配色へ。選んだものは次のセッションにも残る)。
+## コマンド
+
+| コマンド | すること |
+| --- | --- |
+| `/context-flow` | ペインを開く(閉じたあと・端末の幅が狭くて出なかったとき) |
+| `/context-flow boot` | 起動アニメーションをもう一度流す |
+| `/context-flow bg` | 背景を次の配色へ |
+| `/context-flow bg <名前>` | 背景をその配色にする(例: `/context-flow bg navy`) |
+| `/context-flow color` | 流れの色を次の色へ |
+| `/context-flow color <名前>` | 流れの色をその色にする(例: `/context-flow color cyberpunk`) |
+
+`<名前>` は、下の表の名前でも呼び名(`濃紺`、`サイバーパンク` など)でもよい。選んだ背景と色は、次のセッションにも残る。
+
+起動アニメーションは、セッションの開始時と、ほかのペインのタブから切り替えたときに流れる。
+
+### 背景(`bg`)
+
+背景は、既定では塗らない(端末の地の色のまま)。選ぶと、ペイン全体を一色で塗る。
 ペインの一番下の 1 行は mod からは塗れないので、色を付けた時もそこだけ端末の地の色になる。
 
 | 名前 | 配色 |
@@ -88,7 +104,9 @@ claude plugin install context-flow --marketplace rintaroyamaoka/claude-context-f
 | `yoake` | 夜明け(暗い紫紺) |
 | `umi` | 深海 |
 
-流れの色(モデル名・バー・「いま」の文字・レールの光)は、`/context-flow color <名前>` で変えられる(名前なしで次の色へ。選んだものは次のセッションにも残る)。背景と組み合わせて使える。
+### 流れの色(`color`)
+
+モデル名・バー・「いま」の文字・レールの光・起動アニメーションの色。背景と組み合わせて使える。
 
 | 名前 | 色 |
 | --- | --- |
