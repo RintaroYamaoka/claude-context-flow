@@ -2,7 +2,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { Step } from '../types'
-import { backgroundAt, paneBackground, pickPalette, rainbow, runsOf, shine } from '../hooks/domain/color'
+import { SPECTRA, backgroundAt, currentSpectrum, paneBackground, pickPalette, pickSpectrum, rainbow, runsOf, setSpectrum, shine } from '../hooks/domain/color'
 import { chaptersOf, findRow, flowLines, footLines, windowOf } from '../hooks/domain/flow'
 import { applySegments, itemsOf, parseSegments, parseSummary, segmentPrompt, summaryPrompt, turnsOf } from '../hooks/domain/summary'
 import { actionOf, anchorOf, cells, clip, clock, formatTokens, modelName, oneLine, wrapCells } from '../hooks/domain/text'
@@ -73,6 +73,30 @@ test('色:同じ見た目はまとめる、虹は一周で戻る、背景は一�
   expect(pickPalette('茜', 'navy')).toBe('akane')
   expect(pickPalette('umi', 'navy')).toBe('umi')
   expect(pickPalette('無い色', 'navy')).toBeUndefined()
+})
+
+test('流れの色:名前か呼び名で選び、切り替えると色が変わり、どれも一周で戻る', async () => {
+  expect(pickSpectrum('', 'niji')).toBe('cyberpunk')
+  expect(pickSpectrum('', 'cyberpunk')).toBe('niji')
+  expect(pickSpectrum('サイバーパンク', 'niji')).toBe('cyberpunk')
+  expect(pickSpectrum('虹', 'cyberpunk')).toBe('niji')
+  expect(pickSpectrum('無い色', 'niji')).toBeUndefined()
+  try {
+    for (const name of Object.keys(SPECTRA)) {
+      setSpectrum(name)
+      expect(currentSpectrum()).toBe(name)
+      expect(rainbow(1)).toBe(rainbow(0))
+      expect(rainbow(0, 0.75)).not.toBe(rainbow(0))
+    }
+    setSpectrum('cyberpunk')
+    expect(rainbow(0)).toBe('#ff32a0')
+    // 知らない名前では変わらない。
+    setSpectrum('無い色')
+    expect(currentSpectrum()).toBe('cyberpunk')
+  } finally {
+    setSpectrum('niji')
+  }
+  expect(rainbow(0)).toBe('#eb5f57')
 })
 
 test('要約の返答:GOAL などの行を読み、無い行は undefined', async () => {

@@ -1,8 +1,17 @@
 // セッションの立ち上げ: コマンドの登録、ペインを開く、周期とコマ送りのタイマー。
-// 起動アニメーションの再生と、`/context-flow` の引数(boot・bg)もここ。
+// 起動アニメーションの再生と、`/context-flow` の引数(boot・bg・color)もここ。
 import type { EngineInterface } from 'claude-code'
 
-import { PALETTES, paletteList, pickPalette } from '../domain/color'
+import {
+  PALETTES,
+  SPECTRA,
+  currentSpectrum,
+  paletteList,
+  pickPalette,
+  pickSpectrum,
+  setSpectrum,
+  spectrumList,
+} from '../domain/color'
 import { PANE, flags, hydrate, setBeat, setBoot } from '../store'
 import { restoreRows } from './rows'
 import { tick } from './tick'
@@ -44,11 +53,14 @@ export async function startSession($: EngineInterface): Promise<void> {
   await $.command.register({
     name: 'context-flow',
     description:
-      'セッションの会話の流れ・モデル・コンテキスト量のペインを開く(boot で起動アニメーションを再生、bg で背景の配色を切り替え)',
+      'セッションの会話の流れ・モデル・コンテキスト量のペインを開く(boot で起動アニメーションを再生、bg で背景の配色、color で流れの色を切り替え)',
   })
   // 前に選んだ背景の配色を戻す。
   const saved = await $.store.get('backdrop').catch(() => undefined)
   if (typeof saved === 'string' && saved in PALETTES) flags.paletteName = saved
+  // 前に選んだ流れの色を戻す。
+  const savedColor = await $.store.get('spectrum').catch(() => undefined)
+  if (typeof savedColor === 'string') setSpectrum(savedColor)
   // ほかの mod がペインを開くのを少し待ってから開く(その前に開いたら `openBehind` が開く)。
   $.clock.after(OPEN_WAIT_MS, () => {
     if (hasOpened) return
@@ -112,7 +124,7 @@ export async function openBehind($: EngineInterface, id: string): Promise<void> 
   }
 }
 
-/** `/context-flow`: ペインを開く。`bg <名前>` で背景の配色、`boot` で起動アニメーション。 */
+/** `/context-flow`: ペインを開く。`bg <名前>` で背景の配色、`color <名前>` で流れの色、`boot` で起動アニメーション。 */
 export async function runCommand(
   $: EngineInterface,
   args: string,
@@ -129,6 +141,20 @@ export async function runCommand(
 
     return {
       text: `背景を ${next}(${PALETTES[next]?.label ?? '黒'})にしました。選べるのは: ${names}`,
+    }
+  }
+  // `/context-flow color <名前>` で流れの色を変える。名前なしなら次の色へ。
+  const colored = /\bcolor\b\s*(\S*)/.exec(args)
+  if (colored !== null) {
+    const next = pickSpectrum(colored[1] ?? '', currentSpectrum())
+    const names = spectrumList()
+    if (next === undefined) return { text: `その色はありません。選べるのは: ${names}` }
+    setSpectrum(next)
+    await $.store.set('spectrum', next).catch(() => undefined)
+    await $.ui.open(paneOpen())
+
+    return {
+      text: `流れの色を ${next}(${SPECTRA[next]?.label ?? ''})にしました。選べるのは: ${names}`,
     }
   }
   await $.ui.open(paneOpen())
