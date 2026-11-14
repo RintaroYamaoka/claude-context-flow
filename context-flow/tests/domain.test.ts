@@ -77,7 +77,9 @@ test('色:同じ見た目はまとめる、虹は一周で戻る、背景は一�
 
 test('流れの色:名前か呼び名で選び、切り替えると色が変わり、どれも一周で戻る', async () => {
   expect(pickSpectrum('', 'niji')).toBe('cyberpunk')
-  expect(pickSpectrum('', 'cyberpunk')).toBe('niji')
+  expect(pickSpectrum('', 'cyberpunk')).toBe('red')
+  expect(pickSpectrum('', 'red')).toBe('niji')
+  expect(pickSpectrum('赤', 'niji')).toBe('red')
   expect(pickSpectrum('サイバーパンク', 'niji')).toBe('cyberpunk')
   expect(pickSpectrum('虹', 'cyberpunk')).toBe('niji')
   expect(pickSpectrum('無い色', 'niji')).toBeUndefined()

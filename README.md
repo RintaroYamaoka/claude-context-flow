@@ -112,6 +112,7 @@ claude plugin install context-flow --marketplace rintaroyamaoka/claude-context-f
 | --- | --- |
 | `niji` | 虹(既定) |
 | `cyberpunk` | サイバーパンク(ネオンの桃・紫・水色・青) |
+| `red` | 赤(深い紅・赤・朱) |
 
 ## 知っておくこと
 
