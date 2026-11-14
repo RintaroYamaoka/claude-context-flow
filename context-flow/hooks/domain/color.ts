@@ -1,4 +1,4 @@
-// 色:虹の流れ・光の帯・小さな波形・背景の配色。`$` は使わない。
+// 色:流れの色(虹・サイバーパンク)・光の帯・小さな波形・背景の配色。`$` は使わない。
 
 export type Run = { text: string; color?: string; isBold?: boolean; isDim?: boolean }
 
@@ -75,58 +75,120 @@ export const paletteList = (): string =>
     name => `${name}(${PALETTES[name]?.label ?? '黒'})`,
   ).join(' / ')
 
-/** 頼まれた配色の名前を決める。空なら次の配色、名前か呼び名ならそれ。無ければ undefined。 */
-export const pickPalette = (asked: string, current: string): string | undefined => {
-  const byLabel = PALETTE_NAMES.find(name => PALETTES[name]?.label === asked)
+/** 名前の一覧から 1 つ選ぶ。空なら次のもの、名前か呼び名ならそれ。無ければ undefined。 */
+const pickFrom = (
+  table: Record<string, { label: string } | null>,
+  asked: string,
+  current: string,
+): string | undefined => {
+  const names = Object.keys(table)
 
   return asked === ''
-    ? PALETTE_NAMES[(PALETTE_NAMES.indexOf(current) + 1) % PALETTE_NAMES.length]
-    : asked in PALETTES
+    ? names[(names.indexOf(current) + 1) % names.length]
+    : asked in table
       ? asked
-      : byLabel
+      : names.find(name => table[name]?.label === asked)
 }
 
-// ── 虹の流れ ──
-// 色は Claude Code 本体の虹(テーマの rainbow_*)と同じ 7 色。
+/** 頼まれた配色の名前を決める。空なら次の配色、名前か呼び名ならそれ。無ければ undefined。 */
+export const pickPalette = (asked: string, current: string): string | undefined =>
+  pickFrom(PALETTES, asked, current)
+
+// ── 流れの色 ──
 // 色が文字の上をなめらかに左へ流れ続け、その上を明るい帯が右へ走る。
-const RAINBOW: readonly Rgb[] = [
-  [235, 95, 87],
-  [245, 139, 87],
-  [250, 195, 95],
-  [145, 200, 130],
-  [130, 170, 220],
-  [155, 130, 200],
-  [200, 130, 180],
-]
+// 色の並びは `/context-flow color <名前>` で切り替える(名前なしで次の色へ)。
+// 並びは輪になっていて、最後の色から最初の色へ戻る(行って戻る並びは、折り返しも書く)。
+type Spectrum = { label: string; stops: readonly Rgb[] }
+export const SPECTRA: Record<string, Spectrum> = {
+  // Claude Code 本体の虹(テーマの rainbow_*)と同じ 7 色。
+  niji: {
+    label: '虹',
+    stops: [
+      [235, 95, 87],
+      [245, 139, 87],
+      [250, 195, 95],
+      [145, 200, 130],
+      [130, 170, 220],
+      [155, 130, 200],
+      [200, 130, 180],
+    ],
+  },
+  // ネオンの桃・紫・水色・青。
+  cyberpunk: {
+    label: 'サイバーパンク',
+    stops: [
+      [255, 50, 160],
+      [180, 70, 255],
+      [40, 220, 255],
+      [90, 110, 255],
+    ],
+  },
+}
+export const SPECTRUM_NAMES = Object.keys(SPECTRA)
+/** 何も選んでいない時の流れの色。 */
+export const DEFAULT_SPECTRUM = 'niji'
 
-// 虹の刻み。隣り合う色の差が目に見えない細かさにする(毎コマ計算した色と同じに見える)。
+/** 流れの色の一覧(コマンドの返事に添える)。 */
+export const spectrumList = (): string =>
+  SPECTRUM_NAMES.map(name => `${name}(${SPECTRA[name]?.label ?? ''})`).join(' / ')
+
+/** 頼まれた流れの色の名前を決める。空なら次の色、名前か呼び名ならそれ。無ければ undefined。 */
+export const pickSpectrum = (asked: string, current: string): string | undefined =>
+  pickFrom(SPECTRA, asked, current)
+
+// 色の刻み。隣り合う色の差が目に見えない細かさにする(毎コマ計算した色と同じに見える)。
 const SHADES = 720
-/** 白への寄せ方 3 段(なし・帯の縁・帯の芯)× 虹を一周する SHADES 色。起動時に 1 度だけ作る。 */
-const SHADE_TABLE: readonly (readonly string[])[] = [0, 0.4, 0.75].map(glow =>
-  Array.from({ length: SHADES }, (_, n) => {
-    const x = (n / SHADES) * RAINBOW.length
-    const i = Math.floor(x) % RAINBOW.length
-    const a = RAINBOW[i] ?? [0, 0, 0]
-    const b = RAINBOW[(i + 1) % RAINBOW.length] ?? a
-    const k = x - Math.floor(x)
-    const mix = (c: 0 | 1 | 2): number => {
-      const v = a[c] + (b[c] - a[c]) * k
+type ShadeTable = readonly (readonly string[])[]
+/** 白への寄せ方 3 段(なし・帯の縁・帯の芯)× 並びを一周する SHADES 色。 */
+const shadesOf = (stops: readonly Rgb[]): ShadeTable =>
+  [0, 0.4, 0.75].map(glow =>
+    Array.from({ length: SHADES }, (_, n) => {
+      const x = (n / SHADES) * stops.length
+      const i = Math.floor(x) % stops.length
+      const a = stops[i] ?? [0, 0, 0]
+      const b = stops[(i + 1) % stops.length] ?? a
+      const k = x - Math.floor(x)
+      const mix = (c: 0 | 1 | 2): number => {
+        const v = a[c] + (b[c] - a[c]) * k
 
-      return v + (255 - v) * glow
-    }
+        return v + (255 - v) * glow
+      }
 
-    return hexOf([mix(0), mix(1), mix(2)])
-  }),
-)
+      return hexOf([mix(0), mix(1), mix(2)])
+    }),
+  )
 
-/** 虹を一周する色。`t` は何周目でもよい。`glow` で白に寄せる(0・0.4・0.75 の 3 段)。 */
+/** 色の表の控え。並びごとに、初めて使う時に 1 度だけ作る。 */
+const shadeMemo = new Map<string, ShadeTable>()
+const tableOf = (name: string): ShadeTable => {
+  const made = shadeMemo.get(name) ?? shadesOf((SPECTRA[name] ?? SPECTRA[DEFAULT_SPECTRUM])?.stops ?? [])
+  shadeMemo.set(name, made)
+
+  return made
+}
+
+// いまの流れの色。描く関数すべてがこれを読むので、ここに 1 つだけ持つ。
+let spectrumName = DEFAULT_SPECTRUM
+let shadeTable = tableOf(spectrumName)
+
+/** いまの流れの色の名前。 */
+export const currentSpectrum = (): string => spectrumName
+
+/** 流れの色を切り替える。知らない名前なら何もしない。 */
+export const setSpectrum = (name: string): void => {
+  if (!(name in SPECTRA)) return
+  spectrumName = name
+  shadeTable = tableOf(name)
+}
+
+/** いまの流れの色を一周する色。`t` は何周目でもよい。`glow` で白に寄せる(0・0.4・0.75 の 3 段)。 */
 export const rainbow = (t: number, glow = 0): string => {
   const n = Math.floor((((t % 1) + 1) % 1) * SHADES) % SHADES
 
-  return SHADE_TABLE[glow >= 0.7 ? 2 : glow > 0 ? 1 : 0]?.[n] ?? '#ffffff'
+  return shadeTable[glow >= 0.7 ? 2 : glow > 0 ? 1 : 0]?.[n] ?? '#ffffff'
 }
 
-/** いまの虹の色(1 色で塗るもの用)。全体で同じ流れに乗せる。 */
+/** いまの流れの色(1 色で塗るもの用)。全体で同じ流れに乗せる。 */
 export const hueAt = (frame: number, index = 0, glow = 0): string =>
   rainbow(index * 0.045 - frame * 0.05, glow)
 
