@@ -5,8 +5,8 @@
 import type { EngineInterface, RenderInput } from 'claude-code'
 
 import { alarmAt, alarmBar, alarmLine, isOverWarn, urgency } from '../domain/alarm'
-import type { Run } from '../domain/alarm'
 import { backgroundAt, glowAt, hueAt, rainbow, runsOf, shine, ultra } from '../domain/color'
+import type { Run } from '../domain/color'
 import { flowLines, footLines, windowOf } from '../domain/flow'
 import type { Line, Target } from '../domain/flow'
 import { cells, clip, formatTokens, modelName, wrapCells } from '../domain/text'
