@@ -3,47 +3,8 @@
 //   その後: 線をサイレンの光が往復し、先端で火花がはじけ、空きは注意テープが流れる。
 //           WARNING の札が脈打ち、文に光が走り、右で ››› が駆ける
 //   100% に近いほど速くなり、90% 以上で札が CRITICAL になる
-import type { Run as ColorRun } from './color'
+import { type Run, hexOf, lot, runsOf } from './color'
 import { cells } from './text'
-
-/** 警報の文字は、札のために地の色も持つ。 */
-export type Run = ColorRun & { backgroundColor?: string }
-
-const hexOf = (rgb: readonly number[]): string =>
-  `#${rgb.map(v => Math.round(Math.min(255, Math.max(0, v))).toString(16).padStart(2, '0')).join('')}`
-
-/** 0 以上 1 未満の、決まった乱数(乱れた字を選ぶ)。 */
-const lot = (seed: number, salt = 0): number => {
-  let h = Math.imul(seed | 0, 0x9e3779b1) ^ Math.imul(salt + 1, 0x85ebca6b)
-  h = Math.imul(h ^ (h >>> 16), 0x7feb352d)
-  h = Math.imul(h ^ (h >>> 15), 0x846ca68b)
-
-  return ((h ^ (h >>> 16)) >>> 0) / 2 ** 32
-}
-
-/** 同じ見た目の文字をまとめる(地の色も見る)。 */
-const runsOf = (text: string, paint: (index: number) => Omit<Run, 'text'>): Run[] => {
-  const runs: Run[] = []
-  let i = 0
-  for (const ch of text) {
-    const style = paint(i++)
-    const last = runs.at(-1)
-    const glyph = ch === ' ' ? '\u00a0' : ch
-    if (
-      last !== undefined &&
-      last.color === style.color &&
-      last.isBold === style.isBold &&
-      last.isDim === style.isDim &&
-      last.backgroundColor === style.backgroundColor
-    ) {
-      last.text += glyph
-    } else {
-      runs.push({ text: glyph, ...style })
-    }
-  }
-
-  return runs
-}
 
 /** これ以上で警報。 */
 export const WARN_PERCENT = 70
