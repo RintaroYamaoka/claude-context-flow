@@ -7,6 +7,7 @@ import {
   SPECTRA,
   currentSpectrum,
   isRareBoot,
+  isThunderBoot,
   paletteList,
   pickPalette,
   pickSpectrum,
@@ -46,12 +47,36 @@ const paneOpen = () => ({
 
 /**
  * 起動アニメーションを最初から流す。まれな起動かどうかは起動の時刻で決まる。
- * `isRare` なら、まれな起動になる時刻まで数ミリ秒ずらして、必ずまれな起動にする。
+ * `kind` が rare(花火)か thunder(雷)なら、その起動になる時刻まで数ミリ秒ずらして、必ずそれにする。
  */
-export async function playBoot($: EngineInterface, isRare = false): Promise<void> {
-  let bootAt = Date.now()
-  while (isRare && !isRareBoot(bootAt)) bootAt++
+export async function playBoot(
+  $: EngineInterface,
+  kind: BootKind = 'any',
+): Promise<void> {
+  const bootAt = bootTimeFrom(Date.now(), kind, flags.isThunderOn)
+  // 名指しで流した雷は、OFF の間でも描く(描く側は、この時刻か ON の時だけ雷にする)。
+  if (kind === 'thunder') flags.thunderBootAt = bootAt
   await setBoot($, bootAt)
+}
+
+/** 起動アニメーションの種類。quiet は雷を出さない(タブを表に戻した時など、会話の途中)。 */
+export type BootKind = 'any' | 'quiet' | 'rare' | 'thunder'
+
+/**
+ * 起動アニメーションの時刻を決める。どの起動になるかは時刻で決まるので、`now` から数ミリ秒ずらして選ぶ。
+ * 雷の起動が切られている間は、たまたま当たった時刻を外す(名指しの `thunder` は流す)。
+ */
+export function bootTimeFrom(
+  now: number,
+  kind: BootKind,
+  isThunderOn: boolean,
+): number {
+  let bootAt = now
+  while (kind === 'rare' && !isRareBoot(bootAt)) bootAt++
+  while (kind === 'thunder' && !isThunderBoot(bootAt)) bootAt++
+  while ((kind === 'quiet' || (kind === 'any' && !isThunderOn)) && isThunderBoot(bootAt)) bootAt++
+
+  return bootAt
 }
 
 export async function startSession($: EngineInterface): Promise<void> {
@@ -59,7 +84,7 @@ export async function startSession($: EngineInterface): Promise<void> {
     name: 'context-flow',
     description:
       'セッションの会話の流れ・モデル・コンテキスト量のペインを開く(boot で起動アニメーションを再生、bg で背景の配色、color で流れの色を切り替え)',
-    argumentHint: '[boot [rare] | bg <名前> | color <名前>]',
+    argumentHint: '[boot [rare|thunder] | bg <名前> | color <名前> | thunder on|off]',
   })
   // 前に選んだ背景の配色を戻す。
   const saved = await $.store.get('backdrop').catch(() => undefined)
@@ -67,6 +92,8 @@ export async function startSession($: EngineInterface): Promise<void> {
   // 前に選んだ流れの色を戻す。
   const savedColor = await $.store.get('spectrum').catch(() => undefined)
   if (typeof savedColor === 'string') setSpectrum(savedColor)
+  // 雷の起動を出すか(既定は出さない)。
+  flags.isThunderOn = (await $.store.get('thunder').catch(() => undefined)) === true
   // ほかの mod がペインを開くのを少し待ってから開く(その前に開いたら `openBehind` が開く)。
   $.clock.after(OPEN_WAIT_MS, () => {
     if (hasOpened) return
@@ -97,7 +124,7 @@ export async function startSession($: EngineInterface): Promise<void> {
           const shown = mine !== undefined && mine.isShown && mine.isPlaced
           const wasHidden = flags.isShown === false
           flags.isShown = shown
-          if (shown && wasHidden) await playBoot($)
+          if (shown && wasHidden) await playBoot($, 'quiet')
         })
         .catch(() => undefined)
         .then(() => {
@@ -149,6 +176,23 @@ export async function runCommand(
       text: `背景を ${next}(${PALETTES[next]?.label ?? '黒'})にしました。選べるのは: ${names}`,
     }
   }
+  // `/context-flow thunder on|off` で雷の起動を出すか決める。どちらも無しなら切り替える。
+  const thunder = /^\s*thunder\b\s*(\S*)/.exec(args)
+  if (thunder !== null) {
+    const word = thunder[1] ?? ''
+    if (word !== '' && word !== 'on' && word !== 'off') {
+      return { text: '雷の起動は on か off で指定してください(例: /context-flow thunder on)。' }
+    }
+    flags.isThunderOn = word === '' ? !flags.isThunderOn : word === 'on'
+    await $.store.set('thunder', flags.isThunderOn).catch(() => undefined)
+    await $.ui.open(paneOpen())
+
+    return {
+      text: flags.isThunderOn
+        ? '雷の起動を ON にしました(起動 30 回に 1 回)。'
+        : '雷の起動を OFF にしました。',
+    }
+  }
   // `/context-flow color <名前>` で流れの色を変える。名前なしなら次の色へ。
   const colored = /\bcolor\b\s*(\S*)/.exec(args)
   if (colored !== null) {
@@ -164,13 +208,19 @@ export async function runCommand(
     }
   }
   await $.ui.open(paneOpen())
-  // `/context-flow boot` で、起動アニメーションをもう一度流す。`boot rare` なら、まれな起動を流す。
+  // `/context-flow boot` で、起動アニメーションをもう一度流す。
+  // `boot rare` なら花火の夜空、`boot thunder` なら雷の起動を流す。
   if (/\bboot\b/.test(args)) {
-    const isRare = /\brare\b/.test(args)
-    await playBoot($, isRare)
+    const kind = /\bthunder\b/.test(args) ? 'thunder' : /\brare\b/.test(args) ? 'rare' : 'any'
+    await playBoot($, kind)
 
     return {
-      text: isRare ? 'まれな起動アニメーションを流しました。' : '起動アニメーションを流しました。',
+      text:
+        kind === 'thunder'
+          ? '雷の起動アニメーションを流しました。'
+          : kind === 'rare'
+            ? 'まれな起動アニメーションを流しました。'
+            : '起動アニメーションを流しました。',
     }
   }
 

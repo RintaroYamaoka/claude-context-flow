@@ -40,12 +40,18 @@ export const flags: {
   maxScroll: number
   /** このペインが、いま表に出ているタブか(まだ分からない間は undefined)。 */
   isShown: boolean | undefined
+  /** 雷の起動(30 回に 1 回)を出すか。既定は出さない。`/context-flow thunder on` で出す。 */
+  isThunderOn: boolean
+  /** `boot thunder` で名指しして流した雷の起動の時刻(OFF の間でもこれだけは描く)。 */
+  thunderBootAt: number
   /** コンテキストが警報の境目を下から越えた時刻(警告の登場に使う。越えていなければ 0)。 */
   warnAt: number
 } = {
   paletteName: DEFAULT_PALETTE,
   maxScroll: 0,
   isShown: undefined,
+  isThunderOn: false,
+  thunderBootAt: 0,
   warnAt: 0,
 }
 

@@ -80,6 +80,8 @@ claude plugin install context-flow --marketplace rintaroyamaoka/claude-context-f
 | `/context-flow` | ペインを開く(閉じたあと・端末の幅が狭くて出なかったとき) |
 | `/context-flow boot` | 起動アニメーションをもう一度流す |
 | `/context-flow boot rare` | まれな起動アニメーションを流す |
+| `/context-flow boot thunder` | 雷の起動アニメーションを流す(OFF の間でも流れる) |
+| `/context-flow thunder on` / `off` | 雷の起動を出すかを切り替える(既定は OFF。引数なしで切り替え) |
 | `/context-flow bg` | 背景を次の配色へ |
 | `/context-flow bg <名前>` | 背景をその配色にする(例: `/context-flow bg navy`) |
 | `/context-flow color` | 流れの色を次の色へ |
@@ -89,6 +91,11 @@ claude plugin install context-flow --marketplace rintaroyamaoka/claude-context-f
 
 起動アニメーションは、セッションの開始時と、ほかのペインのタブから切り替えたときに流れる。
 10 回に 1 回ほど、まれな起動になる(原色が流れる文字、空にはじける花火、斜めに降る流れ星、一瞬の金色の光)。
+
+`thunder on` にすると、30 回に 1 回ほど、雷の起動(約 5 秒)にもなる。ドット絵の黄色いしま猫が右から歩いてきて座り、
+雨雲に雨を降らされてしょんぼりし、怒って静電気をため、雲へ雷を打ち上げて吹き飛ばす。雲が消えると虹がかかり、猫がにっこりする。
+タブから切り替えたとき(会話の途中)は、雷の起動にはならない。選んだ ON/OFF は、次のセッションにも残る。
+猫の絵は `hooks/domain/thunder.ts` の「絵の差し替え口」にある文字の並び(1 文字が 1 ドット)。
 
 ### 背景(`bg`)
 

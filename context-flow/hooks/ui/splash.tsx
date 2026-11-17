@@ -2,6 +2,7 @@
 // セッションが始まってから少しの間、タイトルが打ち出され、線が中央から開き、
 // 波が立ってから、画面が上から下へ開く。
 // ときどき(RARE_ODDS 回に 1 回)、花火と流れ星の派手な夜空になる(まれな起動)。
+// もっとまれに(THUNDER_ODDS 回に 1 回)、ドット絵の黄色いしま猫が雨雲を雷で吹き飛ばす(雷の起動)。
 import type { EngineInterface, RenderInput } from 'claude-code'
 
 import {
@@ -10,11 +11,20 @@ import {
   flashAt,
   hueAt,
   isRareBoot,
+  isThunderBoot,
   jackpot,
   shootingStar,
   skyRow,
   ultra,
 } from '../domain/color'
+import {
+  MARK_AT,
+  THUNDER_MS,
+  TITLE_AT,
+  thunderFlash,
+  thunderLayout,
+  thunderScene,
+} from '../domain/thunder'
 import { flags } from '../store'
 
 type PaneInput = Extract<RenderInput, { component: 'Pane' }>
@@ -43,9 +53,14 @@ export function renderBoot(
 ): JSX.Element {
   const { Box, Text } = $.ui.resolve(e)
   const { sinceBoot, bootAt, frame, columns, room } = at
-  if (sinceBoot >= SPLASH_MS + REVEAL_MS) return view
-  if (sinceBoot >= SPLASH_MS) {
-    const k = (sinceBoot - SPLASH_MS) / REVEAL_MS
+  // 雷の起動は物語があるので長い。
+  // OFF の間は、名指しで流した時だけ雷にする(前の会話の時刻が残っていても出さない)。
+  const isThunder =
+    isThunderBoot(bootAt) && (flags.isThunderOn || bootAt === flags.thunderBootAt)
+  const splashMs = isThunder ? THUNDER_MS : SPLASH_MS
+  if (sinceBoot >= splashMs + REVEAL_MS) return view
+  if (sinceBoot >= splashMs) {
+    const k = (sinceBoot - splashMs) / REVEAL_MS
     const eased = 1 - (1 - k) * (1 - k) * (1 - k)
 
     return (
@@ -58,6 +73,8 @@ export function renderBoot(
       </Box>
     )
   }
+
+  if (isThunder) return renderThunder($, e, at)
 
   const isRare = isRareBoot(bootAt)
   const paint = isRare ? jackpot : ultra
@@ -153,6 +170,74 @@ export function renderBoot(
           backgroundColor={backdrop(i)}
         >
           {splash.get(i) ?? sky(i) ?? <Text> </Text>}
+        </Box>
+      ))}
+    </Box>
+  )
+}
+
+/** 雷の起動の、文字の色。 */
+const THUNDER_GOLD = '#ffe14a'
+const THUNDER_MARK = '⚡ R A R E ⚡'
+
+/**
+ * 雷の起動: 黄色いしま猫が歩いてきて、雨雲を雷で吹き飛ばし、虹がかかる(`../domain/thunder`)。
+ * タイトルは虹がかかってから打ち出す。
+ */
+function renderThunder(
+  $: EngineInterface,
+  e: PaneInput,
+  at: { sinceBoot: number; bootAt: number; frame: number; columns: number; room: number },
+): JSX.Element {
+  const { Box, Text } = $.ui.resolve(e)
+  const { sinceBoot, bootAt, columns, room } = at
+  const { title, status } = thunderLayout(room)
+  const typed = [...WORDMARK]
+    .slice(0, Math.max(0, Math.floor((sinceBoot - TITLE_AT) / 25)))
+    .join('')
+  const isLit = Math.floor(sinceBoot / 90) % 2 === 0
+  const scene = thunderScene(bootAt, room, columns, sinceBoot)
+
+  const line = (row: number): JSX.Element => {
+    if (row === title) {
+      return (
+        <Text bold color={THUNDER_GOLD}>
+          {typed === '' ? ' ' : typed}
+        </Text>
+      )
+    }
+    if (row === status) {
+      return sinceBoot >= MARK_AT ? (
+        <Text bold color={isLit ? '#ffffff' : THUNDER_GOLD}>
+          {THUNDER_MARK}
+        </Text>
+      ) : (
+        <Text> </Text>
+      )
+    }
+
+    return (
+      <Box flexDirection="row">
+        {(scene[row] ?? []).map(run => (
+          <Text bold={run.isBold} color={run.color} backgroundColor={run.backgroundColor}>
+            {run.text}
+          </Text>
+        ))}
+      </Box>
+    )
+  }
+
+  return (
+    <Box flexDirection="column">
+      {Array.from({ length: room }, (_, i) => (
+        <Box
+          flexDirection="column"
+          alignItems="center"
+          width={e.props.bodyColumns}
+          paddingX={2}
+          backgroundColor={thunderFlash(sinceBoot, backgroundAt(flags.paletteName, i, room))}
+        >
+          {line(i)}
         </Box>
       ))}
     </Box>

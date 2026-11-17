@@ -1,6 +1,12 @@
 // 色:流れの色(虹・サイバーパンク・赤・ブループル)・光の帯・小さな波形・背景の配色。`$` は使わない。
 
-export type Run = { text: string; color?: string; isBold?: boolean; isDim?: boolean }
+export type Run = {
+  text: string
+  color?: string
+  backgroundColor?: string
+  isBold?: boolean
+  isDim?: boolean
+}
 
 /** 同じ見た目の文字をまとめる(描く要素の数を抑える)。 */
 export const runsOf = (
@@ -17,7 +23,8 @@ export const runsOf = (
       last !== undefined &&
       last.color === style.color &&
       last.isBold === style.isBold &&
-      last.isDim === style.isDim
+      last.isDim === style.isDim &&
+      last.backgroundColor === style.backgroundColor
     ) {
       last.text += glyph
     } else {
@@ -28,7 +35,7 @@ export const runsOf = (
   return runs
 }
 
-const hexOf = (rgb: readonly number[]): string =>
+export const hexOf = (rgb: readonly number[]): string =>
   `#${rgb.map(v => Math.round(Math.min(255, Math.max(0, v))).toString(16).padStart(2, '0')).join('')}`
 
 // ── 背景 ──
@@ -304,7 +311,7 @@ export const wave = (frame: number): string =>
 export const RARE_ODDS = 10
 
 /** 起動の時刻から 0 以上 1 未満の数を作る(同じ時刻・同じ salt なら同じ数)。 */
-const lot = (seed: number, salt = 0): number => {
+export const lot = (seed: number, salt = 0): number => {
   let h = Math.imul((seed ^ (seed / 2 ** 32)) | 0, 0x9e3779b1) ^ Math.imul(salt + 1, 0x85ebca6b)
   h = Math.imul(h ^ (h >>> 16), 0x7feb352d)
   h = Math.imul(h ^ (h >>> 15), 0x846ca68b)
@@ -312,8 +319,18 @@ const lot = (seed: number, salt = 0): number => {
   return ((h ^ (h >>> 16)) >>> 0) / 2 ** 32
 }
 
-/** この時刻に始まった起動が、まれな起動か。 */
-export const isRareBoot = (seed: number): boolean => seed > 0 && lot(seed) < 1 / RARE_ODDS
+/** 何回に 1 回、雷の起動(ドット絵の黄色いしま猫が、雨雲を雷で吹き飛ばす。`./thunder`)になるか。 */
+export const THUNDER_ODDS = 30
+
+/** この時刻に始まった起動が、雷の起動か。 */
+export const isThunderBoot = (seed: number): boolean => seed > 0 && lot(seed) < 1 / THUNDER_ODDS
+
+/** この時刻に始まった起動が、まれな起動(花火の夜空)か。雷の起動とは重ならない。 */
+export const isRareBoot = (seed: number): boolean => {
+  const n = lot(seed)
+
+  return seed > 0 && n >= 1 / THUNDER_ODDS && n < 1 / THUNDER_ODDS + 1 / RARE_ODDS
+}
 
 /** まれな起動の原色(花火と、流れる文字の色)。 */
 const NEON = ['#ff3b6b', '#ffd54a', '#3bf0ff', '#b15cff', '#5cff8a', '#ff8a3b'] as const
