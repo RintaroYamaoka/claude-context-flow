@@ -304,11 +304,16 @@ export const wave = (frame: number): string =>
   }).join('')
 
 // ── まれな起動 ──
-// 起動アニメーションは、ときどき(RARE_ODDS 回に 1 回)派手な夜空になる:
+// 起動アニメーションは、ときどき(RARE_RATE の割合で)派手な夜空になる:
 // 文字と線は原色が速く流れ、空には花火がはじけ、流れ星が斜めに降り、一瞬だけ金色に光る。
 // 当たりかどうかは起動の時刻だけで決める(描くたびに変わらないように)。
-/** 何回に 1 回、まれな起動になるか。 */
-export const RARE_ODDS = 10
+// 当たりは上から順に判定する: まず花火、外れたら雷、それも外れたら台風、どれも外れたらいつもの起動。
+/** まれな起動(花火の夜空)になる割合。 */
+export const RARE_RATE = 0.2
+/** 花火に外れたとき、雷の起動(ドット絵の黄色いしま猫が雨雲を雷で吹き飛ばす。`./thunder`)になる割合。 */
+export const THUNDER_RATE = 0.1
+/** 雷にも外れたとき、台風の起動(しま猫が暴風に飛ばされる。`./typhoon`)になる割合。 */
+export const TYPHOON_RATE = 0.1
 
 /** 起動の時刻から 0 以上 1 未満の数を作る(同じ時刻・同じ salt なら同じ数)。 */
 export const lot = (seed: number, salt = 0): number => {
@@ -319,18 +324,33 @@ export const lot = (seed: number, salt = 0): number => {
   return ((h ^ (h >>> 16)) >>> 0) / 2 ** 32
 }
 
-/** 何回に 1 回、雷の起動(ドット絵の黄色いしま猫が、雨雲を雷で吹き飛ばす。`./thunder`)になるか。 */
-export const THUNDER_ODDS = 30
+// lot(seed) の 0〜1 を、上から順の判定どおりの幅で区切る(花火 20%・雷 8%・台風 7.2%・残りはいつもの起動)。
+const RARE_END = RARE_RATE
+const THUNDER_END = RARE_END + (1 - RARE_RATE) * THUNDER_RATE
+const TYPHOON_END = THUNDER_END + (1 - RARE_RATE) * (1 - THUNDER_RATE) * TYPHOON_RATE
+
+/** 起動の種類。時刻だけで決まる。 */
+export type BootLot = 'plain' | 'rare' | 'thunder' | 'typhoon'
+
+/** この時刻に始まった起動の種類。 */
+export const bootLotOf = (seed: number): BootLot => {
+  if (seed <= 0) return 'plain'
+  const n = lot(seed)
+  if (n < RARE_END) return 'rare'
+  if (n < THUNDER_END) return 'thunder'
+  if (n < TYPHOON_END) return 'typhoon'
+
+  return 'plain'
+}
+
+/** この時刻に始まった起動が、まれな起動(花火の夜空)か。 */
+export const isRareBoot = (seed: number): boolean => bootLotOf(seed) === 'rare'
 
 /** この時刻に始まった起動が、雷の起動か。 */
-export const isThunderBoot = (seed: number): boolean => seed > 0 && lot(seed) < 1 / THUNDER_ODDS
+export const isThunderBoot = (seed: number): boolean => bootLotOf(seed) === 'thunder'
 
-/** この時刻に始まった起動が、まれな起動(花火の夜空)か。雷の起動とは重ならない。 */
-export const isRareBoot = (seed: number): boolean => {
-  const n = lot(seed)
-
-  return seed > 0 && n >= 1 / THUNDER_ODDS && n < 1 / THUNDER_ODDS + 1 / RARE_ODDS
-}
+/** この時刻に始まった起動が、台風の起動か。 */
+export const isTyphoonBoot = (seed: number): boolean => bootLotOf(seed) === 'typhoon'
 
 /** まれな起動の原色(花火と、流れる文字の色)。 */
 const NEON = ['#ff3b6b', '#ffd54a', '#3bf0ff', '#b15cff', '#5cff8a', '#ff8a3b'] as const

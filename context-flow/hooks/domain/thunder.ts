@@ -1,4 +1,4 @@
-// 雷の起動(まれな起動のもう一つ。THUNDER_ODDS 回に 1 回)。`$` は使わない。
+// 雷の起動(花火に外れた起動の THUNDER_RATE の割合。`./color` の bootLotOf)。`$` は使わない。
 // 物語: 黄色いしま猫が右から歩いてきて、まん中に座る。不機嫌な雨雲が流れてきて雨を降らせる。
 // 猫は驚いて、しょんぼりして、怒って毛を逆立てて静電気をため、雲へ雷を打ち上げて吹き飛ばす。
 // 雲が消えると虹がかかり、毛がふくらんだままの猫がにっこりする。
@@ -29,7 +29,7 @@ export const TITLE_AT = 4200
 export const MARK_AT = 4500
 
 /** ドットの色。`.` は透明。 */
-const INK: Record<string, string> = {
+export const INK: Record<string, string> = {
   o: '#4a2f1a', // 輪郭
   y: '#ffd84d', // 毛
   d: '#e8a62c', // しま
@@ -72,7 +72,7 @@ const WALK_LEGS = [
 ]
 
 // ── 座った姿(正面 18×16)。大きな頭・大きな目・小さな体 ──
-const SIT = [
+export const SIT = [
   '..o............o..',
   '..oo..........oo..',
   '.oypo........opyo.',
@@ -90,8 +90,8 @@ const SIT = [
   '...owwyyyyyywwo...',
   '....oooooooooo....',
 ]
-type Mood = 'normal' | 'blink' | 'surprise' | 'sad' | 'angry' | 'happy'
-const FACES: Record<Mood, Record<number, string>> = {
+export type Mood = 'normal' | 'blink' | 'surprise' | 'sad' | 'angry' | 'happy'
+export const FACES: Record<Mood, Record<number, string>> = {
   normal: {},
   blink: {
     6: 'oyyyyyyyyyyyyyyyyo',
@@ -126,13 +126,13 @@ const FACES: Record<Mood, Record<number, string>> = {
   },
 }
 /** しっぽ(5 桁)。SIT の TAIL_X 桁目に重ねる。2 コマで振る。 */
-const TAIL_X = 14
-const TAILS = [
+export const TAIL_X = 14
+export const TAILS = [
   ['', '', '', '', '', '', '', '', '', '', '...o.', '..oyo', '..odo', '.oyo.', 'oyo..', 'oo...'],
   ['', '', '', '', '', '', '', '', '', '', '.....', '...o.', '..oyo', '.odo.', 'oyo..', 'oo...'],
 ]
 /** ひげを出す SIT の行(その行と次の行が 1 文字の行になる)。 */
-const WHISKER_ROW = 8
+export const WHISKER_ROW = 8
 export const SIT_WIDTH = SIT[0]?.length ?? 18
 
 // ── 雨雲(14×8)。むすっとした顔 ──

@@ -1,7 +1,7 @@
 // 雷の起動: 当たりの割合・行の幅・物語の場面が描かれること。
 import { expect, test } from 'claude-code/testing'
 
-import { RARE_ODDS, THUNDER_ODDS, isRareBoot, isThunderBoot } from '../hooks/domain/color'
+import { RARE_RATE, THUNDER_RATE, TYPHOON_RATE, isRareBoot, isThunderBoot, isTyphoonBoot } from '../hooks/domain/color'
 import { THUNDER_MS, artProblems, thunderFlash, thunderLayout, thunderScene } from '../hooks/domain/thunder'
 
 const base = 1_763_000_000_000
@@ -9,23 +9,30 @@ const textOf = (runs: { text: string }[]) => runs.map(run => run.text).join('')
 const screen = (ms: number, rows = 24, columns = 44) =>
   thunderScene(base, rows, columns, ms).map(textOf)
 
-test('雷の起動:おおよそ THUNDER_ODDS 回に 1 回で、花火の夜空とは重ならない', async () => {
-  expect(isThunderBoot(0)).toBe(false)
-  let thunder = 0
+test('起動の当たり:花火 20%、外れの 10% が雷、さらに外れの 10% が台風。重ならない', async () => {
+  expect(RARE_RATE).toBe(0.2)
+  expect(THUNDER_RATE).toBe(0.1)
+  expect(TYPHOON_RATE).toBe(0.1)
+  expect(isRareBoot(0) || isThunderBoot(0) || isTyphoonBoot(0)).toBe(false)
   let rare = 0
-  const tries = 30_000
+  let thunder = 0
+  let typhoon = 0
+  const tries = 60_000
   for (let i = 0; i < tries; i++) {
     const seed = base + i * 137
-    const isThunder = isThunderBoot(seed)
-    const isRare = isRareBoot(seed)
-    expect(isThunder && isRare).toBe(false)
-    if (isThunder) thunder++
-    if (isRare) rare++
+    const hits = [isRareBoot(seed), isThunderBoot(seed), isTyphoonBoot(seed)].filter(Boolean).length
+    expect(hits).toBeLessThan(2)
+    if (isRareBoot(seed)) rare++
+    if (isThunderBoot(seed)) thunder++
+    if (isTyphoonBoot(seed)) typhoon++
   }
-  expect(thunder / tries).toBeGreaterThan(0.7 / THUNDER_ODDS)
-  expect(thunder / tries).toBeLessThan(1.3 / THUNDER_ODDS)
-  expect(rare / tries).toBeGreaterThan(0.7 / RARE_ODDS)
-  expect(rare / tries).toBeLessThan(1.3 / RARE_ODDS)
+  const near = (count: number, rate: number) => {
+    expect(count / tries).toBeGreaterThan(rate * 0.9)
+    expect(count / tries).toBeLessThan(rate * 1.1)
+  }
+  near(rare, 0.2)
+  near(thunder, 0.8 * 0.1)
+  near(typhoon, 0.8 * 0.9 * 0.1)
 })
 
 test('雷の起動:どの時刻・どの大きさでも、行の数と幅がペインどおり', async () => {

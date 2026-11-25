@@ -3,8 +3,7 @@ import type { EngineInterface } from 'claude-code'
 import { expect, test } from 'claude-code/testing'
 
 import { bootTimeFrom, openBehind, runCommand } from '../hooks/app/session'
-import { isThunderBoot } from '../hooks/domain/color'
-import { flags } from '../hooks/store'
+import { isRareBoot, isThunderBoot, isTyphoonBoot } from '../hooks/domain/color'
 
 test('ほかの mod のペインが開いた後に、自分のペインを 1 回だけ開く', async () => {
   const opened: string[] = []
@@ -31,18 +30,27 @@ test('ほかの mod のペインが開いた後に、自分のペインを 1 回
   expect(opened).toEqual(['context-flow'])
 })
 
-test('雷の起動:既定は出さず、名指しなら流し、ON にすれば当たった時刻のまま', async () => {
-  // 雷の起動に当たる時刻を 1 つ探す。
-  let hit = 1_763_000_000_000
-  while (!isThunderBoot(hit)) hit++
-  expect(isThunderBoot(bootTimeFrom(hit, 'any', false))).toBe(false)
-  expect(bootTimeFrom(hit, 'any', true)).toBe(hit)
-  expect(isThunderBoot(bootTimeFrom(hit - 5000, 'thunder', false))).toBe(true)
-  // タブを表に戻した時(会話の途中)は、ON でも雷を出さない。
-  expect(isThunderBoot(bootTimeFrom(hit, 'quiet', true))).toBe(false)
+test('起動の選び方:ふだんは当たった時刻のまま、名指しはその起動、会話の途中は雷も台風も出さない', async () => {
+  const start = 1_763_000_000_000
+  let thunderAt = start
+  while (!isThunderBoot(thunderAt)) thunderAt++
+  let typhoonAt = start
+  while (!isTyphoonBoot(typhoonAt)) typhoonAt++
+  // on/off は無いので、当たった時刻はそのまま(雷も台風も出る)。
+  expect(bootTimeFrom(thunderAt, 'any')).toBe(thunderAt)
+  expect(bootTimeFrom(typhoonAt, 'any')).toBe(typhoonAt)
+  // 名指しは、その起動になる時刻までずらす。
+  expect(isRareBoot(bootTimeFrom(start, 'rare'))).toBe(true)
+  expect(isThunderBoot(bootTimeFrom(start, 'thunder'))).toBe(true)
+  expect(isTyphoonBoot(bootTimeFrom(start, 'typhoon'))).toBe(true)
+  // タブを表に戻した時(会話の途中)は、長い起動(雷・台風)にしない。
+  for (const at of [thunderAt, typhoonAt]) {
+    const quiet = bootTimeFrom(at, 'quiet')
+    expect(isThunderBoot(quiet) || isTyphoonBoot(quiet)).toBe(false)
+  }
 })
 
-test('雷の起動:/context-flow thunder on|off で切り替えて保存し、boot thunder とは混ざらない', async () => {
+test('雷の on/off の切り替えは無い(thunder on は何も保存せず、ペインを開くだけ)', async () => {
   const saved = new Map<string, unknown>()
   const engine = {
     store: {
@@ -54,16 +62,6 @@ test('雷の起動:/context-flow thunder on|off で切り替えて保存し、bo
     ui: { open: async () => ({ isPlaced: true }) },
   } as unknown as EngineInterface
 
-  flags.isThunderOn = false
-  expect((await runCommand(engine, 'thunder on')).text).toContain('ON')
-  expect(flags.isThunderOn).toBe(true)
-  expect(saved.get('thunder')).toBe(true)
-  await runCommand(engine, 'thunder off')
-  expect(flags.isThunderOn).toBe(false)
-  expect(saved.get('thunder')).toBe(false)
-  await runCommand(engine, 'thunder')
-  expect(flags.isThunderOn).toBe(true)
-  expect((await runCommand(engine, 'thunder maybe')).text).toContain('on か off')
-  expect(flags.isThunderOn).toBe(true)
-  flags.isThunderOn = false
+  expect((await runCommand(engine, 'thunder on')).text).toBe('Context ペインを開きました。')
+  expect(saved.has('thunder')).toBe(false)
 })
