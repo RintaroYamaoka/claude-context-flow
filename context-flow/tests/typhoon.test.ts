@@ -1,7 +1,7 @@
 // 台風の起動: 行の幅・物語の場面が描かれること・名指しの時だけ流れること。
 import { expect, test } from 'claude-code/testing'
 
-import { bootTimeFrom } from '../hooks/app/session'
+import { bootKindOf, bootTimeFrom } from '../hooks/app/session'
 import { isTyphoonBoot } from '../hooks/domain/color'
 import { TYPHOON_MS, typhoonArtProblems, typhoonLayout, typhoonScene, windStrength } from '../hooks/domain/typhoon'
 
@@ -56,4 +56,11 @@ test('台風の起動:名指しの typhoon は、台風に当たる時刻へず�
 
 test('台風の起動:絵はどれも、行の長さがそろっている', async () => {
   expect(typhoonArtProblems()).toEqual([])
+})
+
+test('台風の起動:/context-flow boot typhoon の名指しが、台風の起動になる', async () => {
+  expect(bootKindOf('boot typhoon')).toBe('typhoon')
+  expect(bootKindOf('boot thunder')).toBe('thunder')
+  expect(bootKindOf('boot rare')).toBe('rare')
+  expect(bootKindOf('boot')).toBe('any')
 })

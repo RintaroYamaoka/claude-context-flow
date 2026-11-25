@@ -57,6 +57,15 @@ export async function playBoot(
   await setBoot($, bootTimeFrom(Date.now(), kind))
 }
 
+/** `/context-flow boot` の引数から、名指しされた起動の種類を読む(名指しが無ければ any)。 */
+export function bootKindOf(args: string): BootKind {
+  if (/\btyphoon\b/.test(args)) return 'typhoon'
+  if (/\bthunder\b/.test(args)) return 'thunder'
+  if (/\brare\b/.test(args)) return 'rare'
+
+  return 'any'
+}
+
 /** 起動アニメーションの種類。quiet は雷も台風も出さない(タブを表に戻した時など、会話の途中。長い起動でペインが読めなくなるため)。 */
 export type BootKind = 'any' | 'quiet' | 'rare' | 'thunder' | 'typhoon'
 
@@ -187,13 +196,7 @@ export async function runCommand(
   // `/context-flow boot` で、起動アニメーションをもう一度流す。
   // `boot rare` なら花火の夜空、`boot thunder` なら雷の起動、`boot typhoon` なら台風の起動を流す。
   if (/\bboot\b/.test(args)) {
-    const kind: BootKind = /\bwind\b/.test(args)
-      ? 'typhoon'
-      : /\bthunder\b/.test(args)
-        ? 'thunder'
-        : /\brare\b/.test(args)
-          ? 'rare'
-          : 'any'
+    const kind = bootKindOf(args)
     await playBoot($, kind)
 
     return {
