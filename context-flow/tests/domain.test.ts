@@ -2,7 +2,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { Step } from '../types'
-import { RARE_ODDS, SPECTRA, backgroundAt, currentSpectrum, flashAt, isRareBoot, jackpot, paneBackground, pickPalette, pickSpectrum, rainbow, runsOf, setSpectrum, shine, shootingStar, skyRow } from '../hooks/domain/color'
+import { RARE_RATE, SPECTRA, backgroundAt, currentSpectrum, flashAt, isRareBoot, jackpot, paneBackground, pickPalette, pickSpectrum, rainbow, runsOf, setSpectrum, shine, shootingStar, skyRow } from '../hooks/domain/color'
 import { chaptersOf, findRow, flowLines, footLines, windowOf } from '../hooks/domain/flow'
 import { applySegments, itemsOf, parseSegments, parseSummary, segmentPrompt, summaryPrompt, turnsOf } from '../hooks/domain/summary'
 import { actionOf, anchorOf, cells, clip, clock, formatTokens, modelName, oneLine, wrapCells } from '../hooks/domain/text'
@@ -297,7 +297,7 @@ test('アクセントの光:色は付けず、明るい帯の芯だけ白の太�
   ])
 })
 
-test('まれな起動:同じ時刻なら同じ結果で、おおよそ RARE_ODDS 回に 1 回', async () => {
+test('まれな起動:同じ時刻なら同じ結果で、おおよそ RARE_RATE の割合', async () => {
   const base = 1_763_000_000_000
   expect(isRareBoot(base)).toBe(isRareBoot(base))
   expect(isRareBoot(0)).toBe(false)
@@ -305,8 +305,8 @@ test('まれな起動:同じ時刻なら同じ結果で、おおよそ RARE_ODDS
   const tries = 20_000
   for (let i = 0; i < tries; i++) if (isRareBoot(base + i * 137)) hits++
   const rate = hits / tries
-  expect(rate).toBeGreaterThan(0.7 / RARE_ODDS)
-  expect(rate).toBeLessThan(1.3 / RARE_ODDS)
+  expect(rate).toBeGreaterThan(0.85 * RARE_RATE)
+  expect(rate).toBeLessThan(1.15 * RARE_RATE)
 })
 
 test('まれな起動:空の行・流れ星は幅どおりで、花火が出て、尾まで抜けきって終わる', async () => {

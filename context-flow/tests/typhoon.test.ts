@@ -2,6 +2,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import { bootTimeFrom } from '../hooks/app/session'
+import { isTyphoonBoot } from '../hooks/domain/color'
 import { TYPHOON_MS, typhoonArtProblems, typhoonLayout, typhoonScene, windStrength } from '../hooks/domain/typhoon'
 
 const base = 1_763_000_000_000
@@ -49,8 +50,8 @@ test('台風の起動:低いペインでも、ひとことは画面に収まる'
   }
 })
 
-test('台風の起動:名指しの typhoon は、時刻をずらさない(雷・花火の当たりと重なっても風を流す)', async () => {
-  expect(bootTimeFrom(base, 'typhoon', false)).toBe(base)
+test('台風の起動:名指しの typhoon は、台風に当たる時刻へずらす', async () => {
+  expect(isTyphoonBoot(bootTimeFrom(base, 'typhoon'))).toBe(true)
 })
 
 test('台風の起動:絵はどれも、行の長さがそろっている', async () => {

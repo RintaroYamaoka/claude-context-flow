@@ -1,8 +1,9 @@
 // 起動アニメーション。
 // セッションが始まってから少しの間、タイトルが打ち出され、線が中央から開き、
 // 波が立ってから、画面が上から下へ開く。
-// ときどき(RARE_ODDS 回に 1 回)、花火と流れ星の派手な夜空になる(まれな起動)。
-// もっとまれに(THUNDER_ODDS 回に 1 回)、ドット絵の黄色いしま猫が雨雲を雷で吹き飛ばす(雷の起動)。
+// どれになるかは起動の時刻で決まる(`../domain/color` の bootLotOf。上から順に判定):
+// 20% で花火と流れ星の派手な夜空(まれな起動)、外れの 10% でドット絵の黄色いしま猫が雨雲を雷で吹き飛ばし(雷の起動)、
+// さらに外れの 10% でしま猫が暴風に飛ばされる(台風の起動)。
 import type { EngineInterface, RenderInput } from 'claude-code'
 
 import {
@@ -12,6 +13,7 @@ import {
   hueAt,
   isRareBoot,
   isThunderBoot,
+  isTyphoonBoot,
   jackpot,
   shootingStar,
   skyRow,
@@ -54,12 +56,9 @@ export function renderBoot(
 ): JSX.Element {
   const { Box, Text } = $.ui.resolve(e)
   const { sinceBoot, bootAt, frame, columns, room } = at
-  // 雷の起動は物語があるので長い。
-  // OFF の間は、名指しで流した時だけ雷にする(前の会話の時刻が残っていても出さない)。
-  const isThunder =
-    isThunderBoot(bootAt) && (flags.isThunderOn || bootAt === flags.thunderBootAt)
-  // 台風の起動は名指しの時だけ(`boot typhoon`)。
-  const isTyphoon = bootAt > 0 && bootAt === flags.typhoonBootAt
+  // 雷と台風の起動は物語があるので長い。
+  const isThunder = isThunderBoot(bootAt)
+  const isTyphoon = isTyphoonBoot(bootAt)
   const splashMs = isTyphoon ? TYPHOON_MS : isThunder ? THUNDER_MS : SPLASH_MS
   if (sinceBoot >= splashMs + REVEAL_MS) return view
   if (sinceBoot >= splashMs) {

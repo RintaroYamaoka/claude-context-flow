@@ -8,6 +8,7 @@ import {
   currentSpectrum,
   isRareBoot,
   isThunderBoot,
+  isTyphoonBoot,
   paletteList,
   pickPalette,
   pickSpectrum,
@@ -47,36 +48,28 @@ const paneOpen = () => ({
 
 /**
  * 起動アニメーションを最初から流す。まれな起動かどうかは起動の時刻で決まる。
- * `kind` が rare(花火)か thunder(雷)なら、その起動になる時刻まで数ミリ秒ずらして、必ずそれにする。
+ * `kind` が rare(花火)・thunder(雷)・typhoon(台風)なら、その起動になる時刻まで数ミリ秒ずらして、必ずそれにする。
  */
 export async function playBoot(
   $: EngineInterface,
   kind: BootKind = 'any',
 ): Promise<void> {
-  const bootAt = bootTimeFrom(Date.now(), kind, flags.isThunderOn)
-  // 名指しで流した雷は、OFF の間でも描く(描く側は、この時刻か ON の時だけ雷にする)。
-  if (kind === 'thunder') flags.thunderBootAt = bootAt
-  // 風は名指しの時だけ流れる(時刻では決めない)。
-  flags.typhoonBootAt = kind === 'typhoon' ? bootAt : 0
-  await setBoot($, bootAt)
+  await setBoot($, bootTimeFrom(Date.now(), kind))
 }
 
-/** 起動アニメーションの種類。quiet は雷を出さない(タブを表に戻した時など、会話の途中)。 */
+/** 起動アニメーションの種類。quiet は雷も台風も出さない(タブを表に戻した時など、会話の途中。長い起動でペインが読めなくなるため)。 */
 export type BootKind = 'any' | 'quiet' | 'rare' | 'thunder' | 'typhoon'
 
 /**
  * 起動アニメーションの時刻を決める。どの起動になるかは時刻で決まるので、`now` から数ミリ秒ずらして選ぶ。
- * 雷の起動が切られている間は、たまたま当たった時刻を外す(名指しの `thunder` は流す)。
+ * `any` は当たった時刻のまま(花火・雷・台風のどれにもなりうる)。
  */
-export function bootTimeFrom(
-  now: number,
-  kind: BootKind,
-  isThunderOn: boolean,
-): number {
+export function bootTimeFrom(now: number, kind: BootKind): number {
   let bootAt = now
   while (kind === 'rare' && !isRareBoot(bootAt)) bootAt++
   while (kind === 'thunder' && !isThunderBoot(bootAt)) bootAt++
-  while ((kind === 'quiet' || (kind === 'any' && !isThunderOn)) && isThunderBoot(bootAt)) bootAt++
+  while (kind === 'typhoon' && !isTyphoonBoot(bootAt)) bootAt++
+  while (kind === 'quiet' && (isThunderBoot(bootAt) || isTyphoonBoot(bootAt))) bootAt++
 
   return bootAt
 }
@@ -86,7 +79,7 @@ export async function startSession($: EngineInterface): Promise<void> {
     name: 'context-flow',
     description:
       'セッションの会話の流れ・モデル・コンテキスト量のペインを開く(boot で起動アニメーションを再生、bg で背景の配色、color で流れの色を切り替え)',
-    argumentHint: '[boot [rare|thunder|typhoon] | bg <名前> | color <名前> | thunder on|off]',
+    argumentHint: '[boot [rare|thunder|typhoon] | bg <名前> | color <名前>]',
   })
   // 前に選んだ背景の配色を戻す。
   const saved = await $.store.get('backdrop').catch(() => undefined)
@@ -94,8 +87,6 @@ export async function startSession($: EngineInterface): Promise<void> {
   // 前に選んだ流れの色を戻す。
   const savedColor = await $.store.get('spectrum').catch(() => undefined)
   if (typeof savedColor === 'string') setSpectrum(savedColor)
-  // 雷の起動を出すか(既定は出さない)。
-  flags.isThunderOn = (await $.store.get('thunder').catch(() => undefined)) === true
   // ほかの mod がペインを開くのを少し待ってから開く(その前に開いたら `openBehind` が開く)。
   $.clock.after(OPEN_WAIT_MS, () => {
     if (hasOpened) return
@@ -176,23 +167,6 @@ export async function runCommand(
 
     return {
       text: `背景を ${next}(${PALETTES[next]?.label ?? '黒'})にしました。選べるのは: ${names}`,
-    }
-  }
-  // `/context-flow thunder on|off` で雷の起動を出すか決める。どちらも無しなら切り替える。
-  const thunder = /^\s*thunder\b\s*(\S*)/.exec(args)
-  if (thunder !== null) {
-    const word = thunder[1] ?? ''
-    if (word !== '' && word !== 'on' && word !== 'off') {
-      return { text: '雷の起動は on か off で指定してください(例: /context-flow thunder on)。' }
-    }
-    flags.isThunderOn = word === '' ? !flags.isThunderOn : word === 'on'
-    await $.store.set('thunder', flags.isThunderOn).catch(() => undefined)
-    await $.ui.open(paneOpen())
-
-    return {
-      text: flags.isThunderOn
-        ? '雷の起動を ON にしました(起動 30 回に 1 回)。'
-        : '雷の起動を OFF にしました。',
     }
   }
   // `/context-flow color <名前>` で流れの色を変える。名前なしなら次の色へ。
