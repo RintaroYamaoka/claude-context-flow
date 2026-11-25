@@ -81,6 +81,7 @@ claude plugin install context-flow --marketplace rintaroyamaoka/claude-context-f
 | `/context-flow boot` | 起動アニメーションをもう一度流す |
 | `/context-flow boot rare` | まれな起動アニメーションを流す |
 | `/context-flow boot thunder` | 雷の起動アニメーションを流す(OFF の間でも流れる) |
+| `/context-flow boot typhoon` | 台風の起動アニメーションを流す(名指しした時だけ流れる) |
 | `/context-flow thunder on` / `off` | 雷の起動を出すかを切り替える(既定は OFF。引数なしで切り替え) |
 | `/context-flow bg` | 背景を次の配色へ |
 | `/context-flow bg <名前>` | 背景をその配色にする(例: `/context-flow bg navy`) |

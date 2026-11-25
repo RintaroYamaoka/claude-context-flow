@@ -25,6 +25,7 @@ import {
   thunderLayout,
   thunderScene,
 } from '../domain/thunder'
+import { TYPHOON_MARK_AT, TYPHOON_MS, TYPHOON_TITLE_AT, typhoonLayout, typhoonScene } from '../domain/typhoon'
 import { flags } from '../store'
 
 type PaneInput = Extract<RenderInput, { component: 'Pane' }>
@@ -57,7 +58,9 @@ export function renderBoot(
   // OFF の間は、名指しで流した時だけ雷にする(前の会話の時刻が残っていても出さない)。
   const isThunder =
     isThunderBoot(bootAt) && (flags.isThunderOn || bootAt === flags.thunderBootAt)
-  const splashMs = isThunder ? THUNDER_MS : SPLASH_MS
+  // 台風の起動は名指しの時だけ(`boot typhoon`)。
+  const isTyphoon = bootAt > 0 && bootAt === flags.typhoonBootAt
+  const splashMs = isTyphoon ? TYPHOON_MS : isThunder ? THUNDER_MS : SPLASH_MS
   if (sinceBoot >= splashMs + REVEAL_MS) return view
   if (sinceBoot >= splashMs) {
     const k = (sinceBoot - splashMs) / REVEAL_MS
@@ -74,6 +77,7 @@ export function renderBoot(
     )
   }
 
+  if (isTyphoon) return renderTyphoon($, e, at)
   if (isThunder) return renderThunder($, e, at)
 
   const isRare = isRareBoot(bootAt)
@@ -236,6 +240,74 @@ function renderThunder(
           width={e.props.bodyColumns}
           paddingX={2}
           backgroundColor={thunderFlash(sinceBoot, backgroundAt(flags.paletteName, i, room))}
+        >
+          {line(i)}
+        </Box>
+      ))}
+    </Box>
+  )
+}
+
+/** 台風の起動の、文字の色。 */
+const TYPHOON_SKY = '#bfe9ff'
+const TYPHOON_MARK = '≋ T Y P H O O N ≋'
+
+/**
+ * 台風の起動: 暴風で猫が飛ばされ、やむと空から落ちてきて、頭に葉っぱが乗る(`../domain/typhoon`)。
+ * タイトルは風がやんでから打ち出す。
+ */
+function renderTyphoon(
+  $: EngineInterface,
+  e: PaneInput,
+  at: { sinceBoot: number; bootAt: number; frame: number; columns: number; room: number },
+): JSX.Element {
+  const { Box, Text } = $.ui.resolve(e)
+  const { sinceBoot, bootAt, columns, room } = at
+  const { title, status } = typhoonLayout(room)
+  const typed = [...WORDMARK]
+    .slice(0, Math.max(0, Math.floor((sinceBoot - TYPHOON_TITLE_AT) / 25)))
+    .join('')
+  const isLit = Math.floor(sinceBoot / 120) % 2 === 0
+  const scene = typhoonScene(bootAt, room, columns, sinceBoot)
+
+  const line = (row: number): JSX.Element => {
+    if (row === title) {
+      return (
+        <Text bold color={TYPHOON_SKY}>
+          {typed === '' ? ' ' : typed}
+        </Text>
+      )
+    }
+    if (row === status) {
+      return sinceBoot >= TYPHOON_MARK_AT ? (
+        <Text bold color={isLit ? '#ffffff' : TYPHOON_SKY}>
+          {TYPHOON_MARK}
+        </Text>
+      ) : (
+        <Text> </Text>
+      )
+    }
+
+    return (
+      <Box flexDirection="row">
+        {(scene[row] ?? []).map(run => (
+          <Text bold={run.isBold} color={run.color} backgroundColor={run.backgroundColor}>
+            {run.text}
+          </Text>
+        ))}
+      </Box>
+    )
+  }
+
+  return (
+    <Box flexDirection="column">
+      {Array.from({ length: room }, (_, i) => (
+        <Box
+          flexDirection="column"
+          alignItems="center"
+          width={e.props.bodyColumns}
+          paddingX={2}
+          backgroundColor={backgroundAt(flags.paletteName, i, room)}
         >
           {line(i)}
         </Box>

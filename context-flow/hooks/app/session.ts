@@ -56,11 +56,13 @@ export async function playBoot(
   const bootAt = bootTimeFrom(Date.now(), kind, flags.isThunderOn)
   // 名指しで流した雷は、OFF の間でも描く(描く側は、この時刻か ON の時だけ雷にする)。
   if (kind === 'thunder') flags.thunderBootAt = bootAt
+  // 風は名指しの時だけ流れる(時刻では決めない)。
+  flags.typhoonBootAt = kind === 'typhoon' ? bootAt : 0
   await setBoot($, bootAt)
 }
 
 /** 起動アニメーションの種類。quiet は雷を出さない(タブを表に戻した時など、会話の途中)。 */
-export type BootKind = 'any' | 'quiet' | 'rare' | 'thunder'
+export type BootKind = 'any' | 'quiet' | 'rare' | 'thunder' | 'typhoon'
 
 /**
  * 起動アニメーションの時刻を決める。どの起動になるかは時刻で決まるので、`now` から数ミリ秒ずらして選ぶ。
@@ -84,7 +86,7 @@ export async function startSession($: EngineInterface): Promise<void> {
     name: 'context-flow',
     description:
       'セッションの会話の流れ・モデル・コンテキスト量のペインを開く(boot で起動アニメーションを再生、bg で背景の配色、color で流れの色を切り替え)',
-    argumentHint: '[boot [rare|thunder] | bg <名前> | color <名前> | thunder on|off]',
+    argumentHint: '[boot [rare|thunder|typhoon] | bg <名前> | color <名前> | thunder on|off]',
   })
   // 前に選んだ背景の配色を戻す。
   const saved = await $.store.get('backdrop').catch(() => undefined)
@@ -209,18 +211,26 @@ export async function runCommand(
   }
   await $.ui.open(paneOpen())
   // `/context-flow boot` で、起動アニメーションをもう一度流す。
-  // `boot rare` なら花火の夜空、`boot thunder` なら雷の起動を流す。
+  // `boot rare` なら花火の夜空、`boot thunder` なら雷の起動、`boot typhoon` なら台風の起動を流す。
   if (/\bboot\b/.test(args)) {
-    const kind = /\bthunder\b/.test(args) ? 'thunder' : /\brare\b/.test(args) ? 'rare' : 'any'
+    const kind: BootKind = /\bwind\b/.test(args)
+      ? 'typhoon'
+      : /\bthunder\b/.test(args)
+        ? 'thunder'
+        : /\brare\b/.test(args)
+          ? 'rare'
+          : 'any'
     await playBoot($, kind)
 
     return {
       text:
-        kind === 'thunder'
-          ? '雷の起動アニメーションを流しました。'
-          : kind === 'rare'
-            ? 'まれな起動アニメーションを流しました。'
-            : '起動アニメーションを流しました。',
+        kind === 'typhoon'
+          ? '台風の起動アニメーションを流しました。'
+          : kind === 'thunder'
+            ? '雷の起動アニメーションを流しました。'
+            : kind === 'rare'
+              ? 'まれな起動アニメーションを流しました。'
+              : '起動アニメーションを流しました。',
     }
   }
 

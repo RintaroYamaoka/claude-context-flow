@@ -44,6 +44,8 @@ export const flags: {
   isThunderOn: boolean
   /** `boot thunder` で名指しして流した雷の起動の時刻(OFF の間でもこれだけは描く)。 */
   thunderBootAt: number
+  /** `boot typhoon` で名指しして流した台風の起動の時刻(流していなければ 0)。 */
+  typhoonBootAt: number
   /** コンテキストが警報の境目を下から越えた時刻(警告の登場に使う。越えていなければ 0)。 */
   warnAt: number
 } = {
@@ -52,6 +54,7 @@ export const flags: {
   isShown: undefined,
   isThunderOn: false,
   thunderBootAt: 0,
+  typhoonBootAt: 0,
   warnAt: 0,
 }
 
